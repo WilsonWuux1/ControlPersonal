@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Battery, CalendarDays, Check, Coins, Moon, Play, Quote, ShieldCheck, Sun } from 'lucide-react'
 import { Button } from '../../components/Button'
+import { Modal } from '../../components/Modal'
 import { StatCard } from '../../components/StatCard'
 import { useAppStore } from '../../stores/appStore'
 import { calculateFinancialSummary } from '../../services/financeCalculations'
@@ -8,6 +9,7 @@ import { calculateHabitDayScore, dayColor } from '../../services/habitScoring'
 import { dailyEffectiveWorkMinutes } from '../../services/timeCalculations'
 import { formatCurrency, formatMinutes, percent } from '../../utils/format'
 import { friendlyDate, nowIso, todayIso } from '../../utils/date'
+import type { MotivationLink } from '../../types/domain'
 
 export function DashboardPage() {
   const data = useAppStore((state) => state.data)
@@ -21,6 +23,8 @@ export function DashboardPage() {
   const [priorityTitle, setPriorityTitle] = useState('')
   const [draftEnergy, setDraftEnergy] = useState(3)
   const [draftMood, setDraftMood] = useState(3)
+  const [moodPrompt, setMoodPrompt] = useState<MotivationLink | null>(null)
+  const [showMoodPrompt, setShowMoodPrompt] = useState(false)
   const today = todayIso()
 
   const summary = useMemo(
@@ -68,7 +72,9 @@ export function DashboardPage() {
     })
     await addMoodEnergyLog({ date: today, dateTime: nowIso(), energy: draftEnergy, mood: draftMood, source: 'dashboard' })
     if (draftEnergy <= 2 || draftMood <= 2) {
-      addToast({ title: 'Estado bajo registrado', detail: suggestedMotivation ? 'Te deje una motivacion sugerida en Hoy.' : 'Revisa tus acciones minimas para recuperar el dia.', tone: 'warning' })
+      setMoodPrompt(suggestedMotivation ?? null)
+      setShowMoodPrompt(true)
+      addToast({ title: 'Estado bajo registrado', detail: 'Te mostre una sugerencia para recuperar el dia.', tone: 'warning' })
     }
   }
 
@@ -258,6 +264,46 @@ export function DashboardPage() {
           </p>
         </section>
       </div>
+      <Modal title="Recuperar el dia" open={showMoodPrompt} onClose={() => setShowMoodPrompt(false)}>
+        <div className="mood-prompt">
+          <div className="mood-prompt-icon">
+            <ShieldCheck size={28} />
+          </div>
+          <div>
+            <strong>Tu estado esta bajo. Haz una pausa antes de seguir.</strong>
+            <p>No tienes que resolver todo ahora. Elige una accion pequena, recupera algo de energia y vuelve con menos presion.</p>
+          </div>
+          {principle ? (
+            <blockquote>{principle.text}</blockquote>
+          ) : null}
+          {moodPrompt?.url ? (
+            <article className="mood-video-card">
+              <span>Video sugerido</span>
+              <strong>{moodPrompt.title}</strong>
+              {moodPrompt.personalNote ? <p>{moodPrompt.personalNote}</p> : null}
+              <a className="button button-primary" href={moodPrompt.url} target="_blank" rel="noreferrer">
+                <Play size={18} />
+                <span>Ver ahora</span>
+              </a>
+            </article>
+          ) : (
+            <div className="notice info">
+              <p>Guarda videos o notas en Motivacion para que aparezca una recomendacion directa cuando tu animo o energia bajen.</p>
+            </div>
+          )}
+          <div className="list compact">
+            {data.settings.dayRescueActions.slice(0, 3).map((action) => (
+              <div className="list-row" key={action}>
+                <ShieldCheck size={18} />
+                <span>{action}</span>
+              </div>
+            ))}
+          </div>
+          <div className="actions">
+            <Button onClick={() => setShowMoodPrompt(false)}>Entendido</Button>
+          </div>
+        </div>
+      </Modal>
     </section>
   )
 }

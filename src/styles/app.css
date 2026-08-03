@@ -253,6 +253,51 @@ label input, label select, label textarea { color: var(--text); }
 .motivation-focus .button {
   width: fit-content;
 }
+.mood-prompt {
+  display: grid;
+  gap: 14px;
+}
+.mood-prompt-icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 8px;
+  background: #dbeafe;
+  color: var(--primary);
+}
+.mood-prompt strong {
+  font-size: 1.1rem;
+}
+.mood-prompt p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+.mood-prompt blockquote {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 4px solid var(--primary);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text);
+  line-height: 1.5;
+}
+.mood-video-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--gold) 36%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--gold) 8%, var(--surface));
+}
+.mood-video-card span {
+  color: var(--gold);
+  font-size: .82rem;
+  font-weight: 900;
+}
+.mood-video-card .button {
+  width: fit-content;
+}
 .muted { color: var(--muted); }
 .habit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .habit-card { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border); border-left-width: 5px; border-radius: 8px; background: var(--surface-soft); }
