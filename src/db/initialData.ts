@@ -158,9 +158,7 @@ export const initialMotivationLinks: MotivationLink[] = [
   'https://www.tiktok.com/@rise_and_thrive8/video/7443629022304603448?lang=es-419',
   'https://www.tiktok.com/@has_que_suceda/video/7481907907198602518',
   'https://www.tiktok.com/@hazlo.posible8/video/7498812377656315144',
-  'https://www.tiktok.com/@pizzolog7/video/7492606149791927558',
-  'https://www.tiktok.com/@joshua24k/video/7482229320069483798',
-  'https://www.tiktok.com/@joshua24k/video/7472945829368712470',
+  'https://www.tiktok.com/@pizzolog7/video/7492606149791927558',  
 ].map((url, index) => ({
   ...baseEntity(),
   title: `Video motivacional ${index + 1}`,
