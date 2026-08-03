@@ -1,0 +1,750 @@
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { BarChart3, CalendarDays, Coins, Dumbbell, Heart, Moon, Printer, Sparkles, Target, UserRound } from 'lucide-react'
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Button } from '../../components/Button'
+import { StatCard } from '../../components/StatCard'
+import { useAppStore } from '../../stores/appStore'
+import { calculateFinancialSummary } from '../../services/financeCalculations'
+import { calculateHabitDayScore } from '../../services/habitScoring'
+import { averageSleepHours } from '../../services/timeCalculations'
+import { todayIso } from '../../utils/date'
+import { formatCurrency, formatMinutes } from '../../utils/format'
+import { bodyProfileSummary, getProfileSummary, motivationForLowMood, recommendationSeed } from '../../services/personalInsights'
+
+const clampPercent = (value: number): number => Math.min(100, Math.max(0, Math.round(value)))
+const habitLineColors = ['#16a34a', '#2563eb', '#db2777', '#9333ea', '#e11d48', '#0f766e', '#0284c7']
+const trackedHabitNames = ['Entrenamiento', 'Lectura', 'Cuidado personal y skincare', 'Meditacion', 'Tiempo de pareja', 'Trabajo productivo', 'Tiempo con familia o amigos']
+
+const localDateKey = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const monthStart = (date: string): string => `${date.slice(0, 7)}-01`
+const yearStart = (date: string): string => `${date.slice(0, 4)}-01-01`
+const monthEnd = (date: string): string => {
+  const year = Number(date.slice(0, 4))
+  const month = Number(date.slice(5, 7))
+  return localDateKey(new Date(year, month, 0))
+}
+const addDays = (date: Date, days: number): Date => {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
+const datesBetween = (start: string, end: string): string[] => {
+  const dates: string[] = []
+  const current = new Date(`${start}T00:00:00`)
+  const limit = new Date(`${end}T00:00:00`)
+  while (current.getTime() <= limit.getTime()) {
+    dates.push(localDateKey(current))
+    current.setDate(current.getDate() + 1)
+  }
+  return dates
+}
+const average = (values: number[]): number => (values.length ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1)) : 0)
+const sumNumbers = (values: number[]): number => values.reduce((sum, value) => sum + value, 0)
+const dateFromIso = (value: string): string => value.slice(0, 10)
+const shortDate = (value: string): string => value.slice(5)
+const formatSignedCurrency = (value: number, currency: string): string => `${value >= 0 ? '+' : '-'}${formatCurrency(Math.abs(value), currency)}`
+
+interface ReportMetric {
+  label: string
+  value: string
+  detail: string
+}
+
+interface ReportSection {
+  title: string
+  body: string
+}
+
+interface PrintableReport {
+  userName: string
+  range: string
+  generatedAt: string
+  metrics: ReportMetric[]
+  sections: ReportSection[]
+}
+
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+
+const renderPrintableReport = (payload: PrintableReport): string => {
+  const metrics = payload.metrics
+    .map(
+      (metric) => `
+        <article class="metric">
+          <span>${escapeHtml(metric.label)}</span>
+          <strong>${escapeHtml(metric.value)}</strong>
+          <p>${escapeHtml(metric.detail)}</p>
+        </article>
+      `,
+    )
+    .join('')
+  const sections = payload.sections
+    .map(
+      (section) => `
+        <section class="section">
+          <h2>${escapeHtml(section.title)}</h2>
+          <p>${escapeHtml(section.body)}</p>
+        </section>
+      `,
+    )
+    .join('')
+
+  return `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Informe Control Personal</title>
+  <style>
+    @page { size: A4; margin: 18mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #111827;
+      background: #ffffff;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11pt;
+      line-height: 1.45;
+    }
+    .document { width: 100%; }
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      padding-bottom: 14px;
+      border-bottom: 2px solid #2563eb;
+      margin-bottom: 18px;
+    }
+    .eyebrow {
+      color: #2563eb;
+      font-size: 9pt;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 4px 0 6px;
+      font-size: 24pt;
+      line-height: 1.05;
+    }
+    .meta {
+      color: #475569;
+      text-align: right;
+      font-size: 9pt;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .metric {
+      min-height: 78px;
+      padding: 10px;
+      border: 1px solid #dbe3ef;
+      border-radius: 6px;
+      background: #f8fafc;
+      break-inside: avoid;
+    }
+    .metric span {
+      display: block;
+      color: #475569;
+      font-size: 8.5pt;
+      font-weight: 700;
+    }
+    .metric strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 15pt;
+    }
+    .metric p {
+      margin: 4px 0 0;
+      color: #64748b;
+      font-size: 8.5pt;
+    }
+    .section {
+      padding: 12px 0;
+      border-top: 1px solid #e2e8f0;
+      break-inside: avoid;
+    }
+    .section h2 {
+      margin: 0 0 6px;
+      color: #0f172a;
+      font-size: 13pt;
+    }
+    .section p {
+      margin: 0;
+      color: #334155;
+    }
+    footer {
+      margin-top: 18px;
+      padding-top: 10px;
+      border-top: 1px solid #e2e8f0;
+      color: #64748b;
+      font-size: 8.5pt;
+    }
+    @media screen {
+      body { background: #e5e7eb; padding: 24px; }
+      .document {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 0 auto;
+        padding: 18mm;
+        background: #ffffff;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, .16);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="document">
+    <header>
+      <div>
+        <div class="eyebrow">Control Personal</div>
+        <h1>Informe de progreso</h1>
+        <p>${escapeHtml(payload.userName)}</p>
+      </div>
+      <div class="meta">
+        <strong>Periodo</strong><br />
+        ${escapeHtml(payload.range)}<br /><br />
+        <strong>Generado</strong><br />
+        ${escapeHtml(payload.generatedAt)}
+      </div>
+    </header>
+    <section class="metrics">${metrics}</section>
+    ${sections}
+    <footer>
+      Este informe resume tus registros locales del periodo seleccionado. Sirve para seguimiento personal y toma de decisiones practicas.
+    </footer>
+  </main>
+</body>
+</html>`
+}
+
+const printReport = (payload: PrintableReport): void => {
+  const reportWindow = window.open('', '_blank')
+  if (!reportWindow) {
+    window.print()
+    return
+  }
+  reportWindow.document.open()
+  reportWindow.document.write(renderPrintableReport(payload))
+  reportWindow.document.close()
+  reportWindow.focus()
+  window.setTimeout(() => reportWindow.print(), 250)
+}
+
+export function ProgressPage() {
+  const data = useAppStore((state) => state.data)
+  const [startDate, setStartDate] = useState(() => monthStart(todayIso()))
+  const [endDate, setEndDate] = useState(() => todayIso())
+  if (!data) return null
+
+  const today = todayIso()
+  const safeStart = startDate <= endDate ? startDate : endDate
+  const safeEnd = startDate <= endDate ? endDate : startDate
+  const periodDates = datesBetween(safeStart, safeEnd)
+  const analysisDates = periodDates.filter((date) => date <= today)
+  const inRange = (date: string): boolean => date >= safeStart && date <= safeEnd
+
+  const filteredHabitEntries = data.habitEntries.filter((entry) => inRange(entry.date))
+  const filteredWorkSessions = data.workSessions.filter((session) => inRange(dateFromIso(session.startedAt)))
+  const filteredSleepLogs = data.sleepLogs.filter((log) => inRange(log.date))
+  const filteredMealLogs = data.mealLogs.filter((log) => inRange(dateFromIso(log.dateTime)))
+  const filteredTrainingLogs = data.trainingLogs.filter((log) => inRange(dateFromIso(log.dateTime)))
+  const filteredSocialLogs = data.socialLogs.filter((log) => inRange(dateFromIso(log.dateTime)))
+  const filteredRecreationLogs = data.recreationLogs.filter((log) => inRange(dateFromIso(log.dateTime)))
+  const filteredMovements = data.movements.filter((movement) => inRange(dateFromIso(movement.dateTime)))
+  const filteredDailyCheckIns = data.dailyCheckIns.filter((item) => inRange(item.date))
+  const filteredMoodEnergyLogs = data.moodEnergyLogs.filter((item) => inRange(item.date))
+  const filteredWeightLogs = data.weightLogs.filter((log) => inRange(log.date)).toSorted((a, b) => a.dateTime.localeCompare(b.dateTime))
+
+  const finance = calculateFinancialSummary(data.accounts, data.movements, data.funds, data.debts, data.obligations)
+  const periodFinance = calculateFinancialSummary(data.accounts, filteredMovements, data.funds, data.debts, data.obligations)
+  const habitDayScores = analysisDates.map((date) => calculateHabitDayScore(data.habits, data.habitEntries, date, data.settings.habitScoreWeights))
+  const habitPercent = clampPercent(
+    average(habitDayScores.map((score) => (score.possible ? (score.score / score.possible) * 100 : 0))),
+  )
+  const workMinutes = filteredWorkSessions.reduce((sum, session) => sum + session.effectiveMinutes, 0)
+  const sleep = averageSleepHours(filteredSleepLogs)
+  const socialMinutes = filteredSocialLogs.reduce((sum, item) => sum + item.durationMinutes, 0)
+  const workouts = filteredTrainingLogs.length
+  const profile = getProfileSummary(data.settings)
+  const bodySummary = bodyProfileSummary({ ...data, sleepLogs: filteredSleepLogs, mealLogs: filteredMealLogs, trainingLogs: filteredTrainingLogs })
+  const recommendations = recommendationSeed(data)
+  const motivation = motivationForLowMood(data)
+  const plannedMeals = filteredMealLogs.length ? filteredMealLogs.filter((meal) => meal.planned).length / filteredMealLogs.length : 0
+  const scrollMinutes = filteredRecreationLogs.filter((log) => log.type === 'Desplazamiento automatico').reduce((sum, log) => sum + log.durationMinutes, 0)
+  const creativeMinutes = filteredRecreationLogs.filter((log) => log.type === 'Creacion de contenido').reduce((sum, log) => sum + log.durationMinutes, 0)
+  const finishedWorkSessions = filteredWorkSessions.filter((session) => session.endedAt && session.result.trim().length > 0).length
+  const averageFocus = average(filteredWorkSessions.map((session) => session.focusLevel).filter((focus) => focus > 0))
+  const debtPaid = filteredMovements.filter((movement) => movement.type === 'Pago de deuda').reduce((sum, movement) => sum + movement.amount, 0)
+  const obligationPaid = filteredMovements.filter((movement) => movement.type === 'Pago de obligacion').reduce((sum, movement) => sum + movement.amount, 0)
+  const averageMood = average([...filteredDailyCheckIns.map((item) => item.mood), ...filteredMoodEnergyLogs.map((item) => item.mood)])
+  const averageEnergy = average([...filteredDailyCheckIns.map((item) => item.energy), ...filteredMoodEnergyLogs.map((item) => item.energy)])
+
+  const trackedHabits = trackedHabitNames
+    .map((name) => data.habits.find((habit) => habit.name === name))
+    .filter((habit): habit is NonNullable<typeof habit> => Boolean(habit))
+  const consistencyData = periodDates.map((date) => {
+    const dayScore = calculateHabitDayScore(data.habits, data.habitEntries, date, data.settings.habitScoreWeights)
+    return {
+      fecha: shortDate(date),
+      consistencia: clampPercent(dayScore.possible ? (dayScore.score / dayScore.possible) * 100 : 0),
+      minimos: clampPercent(dayScore.minimumPercent * 100),
+      objetivos: clampPercent(dayScore.targetPercent * 100),
+    }
+  })
+  const habitData = periodDates.map((date) => {
+    const row: Record<string, string | number> = { fecha: shortDate(date) }
+    for (const trackedHabit of trackedHabits) {
+      const entry = filteredHabitEntries.find((item) => item.habitId === trackedHabit.id && item.date === date)
+      row[trackedHabit.id] = entry ? clampPercent((entry.value / Math.max(1, trackedHabit.targetValue)) * 100) : 0
+    }
+    return row
+  })
+  const moodLogDates = new Set(filteredMoodEnergyLogs.map((item) => item.date))
+  const moodEnergyData = [
+    ...filteredDailyCheckIns
+      .filter((item) => !moodLogDates.has(item.date))
+      .map((item) => ({ dateTime: `${item.date}T12:00:00.000Z`, fecha: shortDate(item.date), energia: item.energy, animo: item.mood })),
+    ...filteredMoodEnergyLogs.map((item) => ({ dateTime: item.dateTime, fecha: item.dateTime.slice(5, 16).replace('T', ' '), energia: item.energy, animo: item.mood })),
+  ].toSorted((a, b) => a.dateTime.localeCompare(b.dateTime))
+  const sleepTrendData = filteredSleepLogs
+    .toSorted((a, b) => a.date.localeCompare(b.date))
+    .map((log) => ({ fecha: shortDate(log.date), horas: log.durationHours, calidad: log.quality, energia: log.wakeEnergy }))
+  const foodTrendData = filteredMealLogs
+    .toSorted((a, b) => a.dateTime.localeCompare(b.dateTime))
+    .map((log) => ({ fecha: shortDate(dateFromIso(log.dateTime)), hambre: log.hungerBefore, saciedad: log.satietyAfter, planificada: log.planned ? 5 : 0 }))
+  const financeData = periodDates.map((date) => ({
+    fecha: shortDate(date),
+    ingresos: sumNumbers(filteredMovements.filter((movement) => dateFromIso(movement.dateTime) === date && (movement.type === 'Ingreso' || movement.type === 'Reembolso')).map((movement) => movement.amount)),
+    gastos: sumNumbers(filteredMovements.filter((movement) => dateFromIso(movement.dateTime) === date && (movement.type === 'Gasto' || movement.type === 'Pago de deuda' || movement.type === 'Pago de obligacion')).map((movement) => movement.amount)),
+  }))
+  const tiktokData = ['Creacion de contenido', 'Consumo intencional', 'Desplazamiento automatico'].map((type) => ({
+    type,
+    minutos: filteredRecreationLogs.filter((log) => log.type === type).reduce((sum, log) => sum + log.durationMinutes, 0),
+  }))
+  const weightData = filteredWeightLogs.map((log) => ({ fecha: shortDate(log.date), peso: log.weightLb }))
+
+  const profileLine = `${profile.age ? `${profile.age} anos` : 'edad pendiente'}, ${profile.heightCm ? `${profile.heightCm} cm` : 'altura pendiente'}, ${profile.weightLb ? `${profile.weightLb} lb` : 'peso pendiente'}`
+  const bmiReferenceLine =
+    profile.bmiReferenceMin && profile.bmiReferenceMax ? `${profile.bmiReferenceMin}-${profile.bmiReferenceMax}` : 'Pendiente'
+  const weightReferenceLine =
+    profile.referenceWeightMinLb && profile.referenceWeightMaxLb ? `${profile.referenceWeightMinLb}-${profile.referenceWeightMaxLb} lb` : 'Pendiente'
+  const targetWeightLine = profile.referenceWeightTargetLb ? `${profile.referenceWeightTargetLb} lb` : 'Pendiente'
+  const distanceLine =
+    profile.weightToReferenceLb === undefined
+      ? 'Pendiente'
+      : profile.weightToReferenceLb === 0
+        ? 'En rango'
+        : `${profile.weightToReferenceLb} lb fuera`
+  const bmiPosition = profile.bodyMassIndex ? Math.min(100, Math.max(0, ((profile.bodyMassIndex - 15) / 25) * 100)) : undefined
+  const workPercent = clampPercent((workMinutes / Math.max(1, analysisDates.length * 480)) * 100)
+  const sleepPercent = clampPercent(data.settings.sleepGoalHours ? (sleep / data.settings.sleepGoalHours) * 100 : 0)
+  const trainingPercent = workouts > 0 ? 100 : 0
+  const mealPercent = clampPercent(plannedMeals * 100)
+  const wellbeingPercent = clampPercent((sleepPercent + mealPercent + trainingPercent) / 3)
+  const recreationPercent = creativeMinutes + scrollMinutes === 0 ? 0 : clampPercent((creativeMinutes / Math.max(creativeMinutes + scrollMinutes, 1)) * 100)
+  const financePercent = clampPercent((finance.freeMoney > 0 ? 55 : 15) + (finance.debtPending === 0 ? 25 : 0) + (finance.obligationPending === 0 ? 20 : 0))
+  const areaCards = [
+    {
+      title: 'Habitos',
+      icon: <Target size={18} />,
+      score: habitPercent,
+      tone: habitPercent >= 80 ? 'good' : habitPercent >= 45 ? 'warn' : 'bad',
+      value: `${habitPercent}%`,
+      detail: `${new Set(filteredHabitEntries.map((entry) => entry.date)).size} dias con registros`,
+      action: habitPercent >= 80 ? 'Sostener ritmo' : 'Completar minimo clave',
+    },
+    {
+      title: 'Trabajo',
+      icon: <BarChart3 size={18} />,
+      score: workPercent,
+      tone: workMinutes > analysisDates.length * 600 ? 'bad' : workPercent >= 75 ? 'good' : workPercent >= 25 ? 'warn' : 'quiet',
+      value: formatMinutes(workMinutes),
+      detail: `${finishedWorkSessions} sesiones finalizadas`,
+      action: averageFocus >= 4 ? 'Buen enfoque' : 'Cerrar con resultado',
+    },
+    {
+      title: 'Bienestar',
+      icon: <Moon size={18} />,
+      score: wellbeingPercent,
+      tone: wellbeingPercent >= 75 ? 'good' : wellbeingPercent >= 45 ? 'warn' : 'bad',
+      value: `${sleep} h`,
+      detail: `${mealPercent}% comidas, ${workouts} entrenos`,
+      action: sleepPercent < 80 ? 'Priorizar sueno' : 'Mantener rutina',
+    },
+    {
+      title: 'Recreacion',
+      icon: <Heart size={18} />,
+      score: recreationPercent,
+      tone: scrollMinutes > creativeMinutes && scrollMinutes > 0 ? 'bad' : recreationPercent >= 50 ? 'good' : 'quiet',
+      value: formatMinutes(creativeMinutes),
+      detail: `${formatMinutes(scrollMinutes)} scroll automatico`,
+      action: scrollMinutes > creativeMinutes ? 'Cambiar scroll por intencional' : 'Recreacion bajo control',
+    },
+    {
+      title: 'Finanzas',
+      icon: <Coins size={18} />,
+      score: financePercent,
+      tone: finance.freeMoney < 0 ? 'bad' : financePercent >= 75 ? 'good' : financePercent >= 45 ? 'warn' : 'bad',
+      value: formatCurrency(finance.freeMoney, data.settings.currency),
+      detail: `Periodo ${formatSignedCurrency(periodFinance.netFlow, data.settings.currency)}`,
+      action: finance.freeMoney < 0 ? 'Revisar gastos' : 'Mantener margen',
+    },
+  ]
+
+  const weightChange = filteredWeightLogs.length >= 2 ? Number((filteredWeightLogs.at(-1)?.weightLb ?? 0) - filteredWeightLogs[0].weightLb).toFixed(1) : undefined
+  const report = {
+    overview:
+      habitPercent >= 70
+        ? `En este periodo vas con una consistencia de ${habitPercent}%. La base esta funcionando: conviene mantener los habitos que ya aparecen varias veces en el calendario y no subir dificultad demasiado rapido.`
+        : `En este periodo vas con una consistencia de ${habitPercent}%. Lo mas util ahora es elegir dos o tres habitos base y repetirlos con una meta pequena antes de intentar cubrir todo.`,
+    habits:
+      trackedHabits.length === 0
+        ? 'Todavia no hay habitos clave activos para comparar entrenamiento, lectura, cuidado personal, meditacion, pareja, trabajo y familia.'
+        : `La grafica de habitos clave compara ${trackedHabits.length} areas dia por dia. Los dias sin registro quedan visibles en cero para que el mes no oculte huecos.`,
+    body:
+      profile.bodyMassIndex && profile.bmiCategory
+        ? `${bodySummary.title} Tu IMC actual es ${profile.bodyMassIndex} y corresponde a ${profile.bmiCategory.toLowerCase()}. ${weightChange === undefined ? 'Desde ahora, cada peso registrado quedara en historial para ver tendencia.' : `En este rango tu peso cambio ${weightChange} lb.`}`
+        : 'Completa fecha de nacimiento, altura y peso para que el informe pueda leer tu perfil corporal y mostrar tendencia de peso.',
+    work:
+      workMinutes > 0
+        ? `Registraste ${formatMinutes(workMinutes)} de trabajo efectivo y ${finishedWorkSessions} sesiones finalizadas. ${averageFocus >= 4 ? 'El enfoque promedio fue alto.' : 'Conviene cerrar cada actividad con resultado y cuidar bloques mas cortos si el enfoque baja.'}`
+        : 'No hay trabajo efectivo registrado en este rango. Un bloque corto con resultado concreto ya daria una referencia para comparar.',
+    finances:
+      `En finanzas el periodo quedo en ${formatSignedCurrency(periodFinance.netFlow, data.settings.currency)}: ingresos ${formatCurrency(periodFinance.income, data.settings.currency)} y salidas ${formatCurrency(periodFinance.expense, data.settings.currency)}. Pagaste ${formatCurrency(debtPaid, data.settings.currency)} en deudas y ${formatCurrency(obligationPaid, data.settings.currency)} en obligaciones. Tu dinero libre actual es ${formatCurrency(finance.freeMoney, data.settings.currency)}.`,
+    wellbeing:
+      sleep > 0
+        ? `Tu sueno promedio fue ${sleep} h frente a una meta de ${data.settings.sleepGoalHours} h. ${mealPercent >= 70 ? 'La alimentacion planificada va bien.' : 'La alimentacion necesita mas registros planificados para encontrar un patron claro.'} Animo promedio ${averageMood || 'sin datos'} y energia promedio ${averageEnergy || 'sin datos'}.`
+        : `No hay sueno registrado en este rango. Alimentacion planificada ${mealPercent}% y entrenamientos ${workouts}.`,
+  }
+  const printableReport: PrintableReport = {
+    userName: data.settings.userName || 'Perfil personal',
+    range: `${safeStart} a ${safeEnd}`,
+    generatedAt: new Date().toLocaleString('es-GT', { dateStyle: 'medium', timeStyle: 'short' }),
+    metrics: [
+      { label: 'Consistencia', value: `${habitPercent}%`, detail: `${new Set(filteredHabitEntries.map((entry) => entry.date)).size} dias con registros` },
+      { label: 'Trabajo efectivo', value: formatMinutes(workMinutes), detail: `${finishedWorkSessions} sesiones finalizadas` },
+      { label: 'Sueno promedio', value: `${sleep} h`, detail: `Meta personal ${data.settings.sleepGoalHours} h` },
+      { label: 'Animo promedio', value: averageMood ? `${averageMood}/5` : 'Sin datos', detail: `Energia ${averageEnergy ? `${averageEnergy}/5` : 'sin datos'}` },
+      { label: 'Balance periodo', value: formatSignedCurrency(periodFinance.netFlow, data.settings.currency), detail: `Ingresos ${formatCurrency(periodFinance.income, data.settings.currency)}` },
+      { label: 'Dinero libre actual', value: formatCurrency(finance.freeMoney, data.settings.currency), detail: `Deuda ${formatCurrency(finance.debtPending, data.settings.currency)}` },
+    ],
+    sections: [
+      { title: 'Lectura general', body: report.overview },
+      { title: 'Habitos', body: report.habits },
+      { title: 'Perfil y peso', body: report.body },
+      { title: 'Trabajo', body: report.work },
+      { title: 'Finanzas', body: report.finances },
+      { title: 'Sueno, animo y alimentacion', body: report.wellbeing },
+    ],
+  }
+
+  return (
+    <section className="page stack">
+      <section className="panel no-print">
+        <div className="panel-header">
+          <h2>Rango de progreso</h2>
+          <CalendarDays size={20} />
+        </div>
+        <div className="form-grid three">
+          <label>
+            Fecha inicial
+            <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+          </label>
+          <label>
+            Fecha final
+            <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+          </label>
+          <div className="actions align-end">
+            <Button variant="secondary" onClick={() => { setStartDate(localDateKey(addDays(new Date(`${today}T00:00:00`), -6))); setEndDate(today) }}>
+              Semana
+            </Button>
+            <Button variant="secondary" onClick={() => { setStartDate(monthStart(today)); setEndDate(monthEnd(today)) }}>
+              Mes
+            </Button>
+            <Button variant="secondary" onClick={() => { setStartDate(yearStart(today)); setEndDate(today) }}>
+              Ano
+            </Button>
+            <Button onClick={() => printReport(printableReport)}>
+              <Printer size={18} />
+              Reporte PDF
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <div className="stat-grid">
+        <StatCard label="Habitos periodo" value={`${habitPercent}%`} icon={<Target />} />
+        <StatCard label="Trabajo periodo" value={formatMinutes(workMinutes)} icon={<BarChart3 />} />
+        <StatCard label="Sueno promedio" value={`${sleep} h`} icon={<Moon />} />
+        <StatCard label="Entrenamientos" value={String(workouts)} icon={<Dumbbell />} tone="green" />
+        <StatCard label="Vida social" value={formatMinutes(socialMinutes)} icon={<Heart />} tone="gold" />
+        <StatCard label="Dinero libre" value={formatCurrency(finance.freeMoney, data.settings.currency)} icon={<Coins />} tone="slate" />
+      </div>
+      <section className="panel progress-spotlight">
+        <div className="panel-header">
+          <h2>Lectura personal</h2>
+          <Sparkles size={20} />
+        </div>
+        <div className="progress-spotlight-grid">
+          <div className="progress-profile-card">
+            <div className="progress-profile-title">
+              <UserRound size={20} />
+              <span>Perfil base</span>
+            </div>
+            <strong>{profileLine}</strong>
+            <div className="bmi-scale-card">
+              <div className="bmi-scale-heading">
+                <span>IMC actual</span>
+                <strong>{profile.bodyMassIndex ?? '--'}</strong>
+              </div>
+              <div className="bmi-scale" aria-label="Escala visual de IMC">
+                <span className="bmi-segment bmi-low">Bajo</span>
+                <span className="bmi-segment bmi-reference">Referencia</span>
+                <span className="bmi-segment bmi-over">Sobre</span>
+                <span className="bmi-segment bmi-high">Obesidad</span>
+                {bmiPosition !== undefined ? <span className="bmi-marker" style={{ left: `${bmiPosition}%` }} /> : null}
+              </div>
+              <div className="bmi-scale-labels">
+                <span>18.5</span>
+                <span>24.9</span>
+                <span>30</span>
+              </div>
+            </div>
+            <div className="body-metric-grid">
+              <div>
+                <span>IMC ideal</span>
+                <strong>{profile.bmiReferenceTarget ?? 'Pendiente'}</strong>
+                <small>Centro practico</small>
+              </div>
+              <div>
+                <span>Rango IMC</span>
+                <strong>{bmiReferenceLine}</strong>
+                <small>Adultos 20+</small>
+              </div>
+              <div>
+                <span>Rango de peso</span>
+                <strong>{weightReferenceLine}</strong>
+                <small>Segun altura</small>
+              </div>
+              <div>
+                <span>Peso ideal estimado</span>
+                <strong>{targetWeightLine}</strong>
+                <small>IMC 22</small>
+              </div>
+              <div>
+                <span>Distancia</span>
+                <strong>{distanceLine}</strong>
+                <small>Contra el rango</small>
+              </div>
+            </div>
+            <div className="actions">
+              <Link className="button button-secondary" to="/configuracion">
+                <span>Editar perfil</span>
+              </Link>
+              <Link className="button button-secondary" to="/bienestar">
+                <span>Registrar bienestar</span>
+              </Link>
+              <Link className="button button-secondary" to="/motivacion">
+                <span>Motivacion</span>
+              </Link>
+            </div>
+          </div>
+          <div className="progress-recommendation-list">
+            <article className="body-summary-card">
+              <strong>{bodySummary.title}</strong>
+              <p>{bodySummary.description}</p>
+            </article>
+            {recommendations.slice(0, 1).map((item) => (
+              <p key={item}>{item}</p>
+            ))}
+            {recommendations.slice(2, 4).map((item) => (
+              <p key={item}>{item}</p>
+            ))}
+          </div>
+        </div>
+        {motivation.length > 0 ? (
+          <div className="progress-motivation-callout">
+            <strong>Animo bajo detectado</strong>
+            <div className="mobile-card-list">
+              {motivation.slice(0, 3).map((item) => (
+                <article className="mobile-card" key={item.id}>
+                  <strong>{item.title}</strong>
+                  <span>{item.personalNote ?? item.url ?? 'Motivacion guardada'}</span>
+                </article>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
+      <section className="panel report-panel">
+        <div className="panel-header">
+          <h2>Informe del periodo</h2>
+          <span>{safeStart} a {safeEnd}</span>
+        </div>
+        <div className="report-grid">
+          <article>
+            <strong>Lectura general</strong>
+            <p>{report.overview}</p>
+          </article>
+          <article>
+            <strong>Habitos</strong>
+            <p>{report.habits}</p>
+          </article>
+          <article>
+            <strong>Perfil y peso</strong>
+            <p>{report.body}</p>
+          </article>
+          <article>
+            <strong>Trabajo</strong>
+            <p>{report.work}</p>
+          </article>
+          <article>
+            <strong>Finanzas</strong>
+            <p>{report.finances}</p>
+          </article>
+          <article>
+            <strong>Sueno, animo y alimentacion</strong>
+            <p>{report.wellbeing}</p>
+          </article>
+        </div>
+      </section>
+      <section className="panel">
+        <div className="panel-header">
+          <h2>Estado por area</h2>
+          <CalendarDays size={20} />
+        </div>
+        <div className="area-status-grid">
+          {areaCards.map((area) => (
+            <article className={`area-status-card area-${area.tone}`} key={area.title}>
+              <div className="area-status-header">
+                <span>{area.icon}</span>
+                <strong>{area.title}</strong>
+              </div>
+              <div className="area-status-value">
+                <strong>{area.value}</strong>
+                <span>{area.score}%</span>
+              </div>
+              <div className="area-progress" aria-label={`${area.title} ${area.score}%`}>
+                <span style={{ width: `${area.score}%` }} />
+              </div>
+              <p>{area.detail}</p>
+              <small>{area.action}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+      <div className="two-column">
+        <ChartPanel title="Consistencia mensual" className="full-row">
+          <LineChart data={consistencyData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="fecha" interval="preserveStartEnd" />
+            <YAxis domain={[0, 120]} tickFormatter={(value) => `${value}%`} />
+            <Tooltip formatter={(value) => `${Number(value)}%`} />
+            <Line dataKey="consistencia" name="Consistencia" stroke="#2563eb" strokeWidth={2} />
+            <Line dataKey="minimos" name="Minimos" stroke="#16a34a" strokeWidth={2} />
+            <Line dataKey="objetivos" name="Objetivos" stroke="#f59e0b" strokeWidth={2} />
+          </LineChart>
+        </ChartPanel>
+        <ChartPanel title="Habitos clave">
+          <LineChart data={habitData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="fecha" interval="preserveStartEnd" />
+            <YAxis domain={[0, 120]} tickFormatter={(value) => `${value}%`} />
+            <Tooltip formatter={(value) => `${Number(value)}%`} />
+            {trackedHabits.map((trackedHabit, index) => (
+              <Line key={trackedHabit.id} dataKey={trackedHabit.id} name={trackedHabit.name} stroke={habitLineColors[index % habitLineColors.length]} strokeWidth={2} dot={false} />
+            ))}
+          </LineChart>
+        </ChartPanel>
+        <ChartPanel title="Energia y animo">
+          <LineChart data={moodEnergyData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="fecha" interval="preserveStartEnd" />
+            <YAxis domain={[1, 5]} />
+            <Tooltip />
+            <Line dataKey="energia" stroke="#16a34a" strokeWidth={2} />
+            <Line dataKey="animo" stroke="#7c3aed" strokeWidth={2} />
+          </LineChart>
+        </ChartPanel>
+        <ChartPanel title="Sueno">
+          <LineChart data={sleepTrendData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="fecha" interval="preserveStartEnd" />
+            <YAxis />
+            <Tooltip />
+            <Line dataKey="horas" name="Horas" stroke="#2563eb" strokeWidth={2} />
+            <Line dataKey="calidad" name="Calidad" stroke="#7c3aed" strokeWidth={2} />
+            <Line dataKey="energia" name="Energia" stroke="#16a34a" strokeWidth={2} />
+          </LineChart>
+        </ChartPanel>
+        <ChartPanel title="Alimentacion consciente">
+          <LineChart data={foodTrendData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="fecha" interval="preserveStartEnd" />
+            <YAxis domain={[0, 5]} />
+            <Tooltip />
+            <Line dataKey="hambre" stroke="#f59e0b" strokeWidth={2} />
+            <Line dataKey="saciedad" stroke="#16a34a" strokeWidth={2} />
+            <Line dataKey="planificada" stroke="#2563eb" strokeWidth={2} />
+          </LineChart>
+        </ChartPanel>
+        <ChartPanel title="Peso">
+          <LineChart data={weightData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="fecha" interval="preserveStartEnd" />
+            <YAxis domain={['dataMin - 5', 'dataMax + 5']} />
+            <Tooltip formatter={(value) => `${Number(value)} lb`} />
+            <Line dataKey="peso" name="Peso" stroke="#0f766e" strokeWidth={2} />
+          </LineChart>
+        </ChartPanel>
+        <ChartPanel title="Ingresos y gastos">
+          <BarChart data={financeData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="fecha" interval="preserveStartEnd" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="ingresos" fill="#16a34a" />
+            <Bar dataKey="gastos" fill="#dc2626" />
+          </BarChart>
+        </ChartPanel>
+        <ChartPanel title="TikTok por tipo">
+          <BarChart data={tiktokData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="type" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="minutos" fill="#2563eb" />
+          </BarChart>
+        </ChartPanel>
+      </div>
+    </section>
+  )
+}
+
+function ChartPanel({ title, children, className = '' }: { title: string; children: React.ReactElement; className?: string }) {
+  return (
+    <section className={`panel ${className}`}>
+      <div className="panel-header">
+        <h2>{title}</h2>
+      </div>
+      <ResponsiveContainer width="100%" height={280}>
+        {children}
+      </ResponsiveContainer>
+    </section>
+  )
+}

@@ -1,0 +1,257 @@
+import { describe, expect, it } from 'vitest'
+import type { AppData, Budget, Debt, FinancialAccount, FinancialMovement, Fund, Habit, HabitEntry, Obligation } from '../types/domain'
+import {
+  applyDebtPayment,
+  applyObligationPayment,
+  budgetSpent,
+  calculateAccountBalances,
+  calculateFinancialSummary,
+  distributePaycheck,
+  movementImpactForAccount,
+  transferIsNeutral,
+} from './financeCalculations'
+import { calculateHabitDayScore, dayColor, statusFromValue } from './habitScoring'
+import { calculateSleepDurationHours, calculateWorkSessionDuration } from './timeCalculations'
+import { detectDuplicateIds } from './backupService'
+import { bodyProfileSummary, getProfileSummary } from './personalInsights'
+import { createDefaultSettings } from '../db/initialData'
+
+const stamp = '2026-08-03T12:00:00.000Z'
+
+const account = (id: string, openingBalance: number): FinancialAccount => ({
+  id,
+  createdAt: stamp,
+  updatedAt: stamp,
+  schemaVersion: 1,
+  name: id,
+  type: 'Cuenta bancaria',
+  currency: 'GTQ',
+  openingBalance,
+  status: 'active',
+  color: '#2563eb',
+  icon: 'Landmark',
+})
+
+const movement = (input: Partial<FinancialMovement> & Pick<FinancialMovement, 'id' | 'accountId' | 'type' | 'amount'>): FinancialMovement => ({
+  createdAt: stamp,
+  updatedAt: stamp,
+  schemaVersion: 1,
+  dateTime: stamp,
+  category: 'Comida',
+  description: input.id,
+  tags: [],
+  ...input,
+})
+
+const habit = (id: string): Habit => ({
+  id,
+  createdAt: stamp,
+  updatedAt: stamp,
+  schemaVersion: 1,
+  name: 'Entrenamiento',
+  description: '',
+  category: 'Esenciales',
+  icon: 'Dumbbell',
+  unit: 'minutos',
+  minimumValue: 5,
+  targetValue: 30,
+  excellentValue: 45,
+  frequency: 'daily',
+  specificDays: [0, 1, 2, 3, 4, 5, 6],
+  startDate: '2026-08-01',
+  status: 'active',
+  weight: 1,
+  color: '#2563eb',
+  order: 1,
+})
+
+const habitEntry = (id: string, habitId: string, value: number): HabitEntry => ({
+  id,
+  habitId,
+  value,
+  status: 'target',
+  date: '2026-08-03',
+  createdAt: stamp,
+  updatedAt: stamp,
+  schemaVersion: 1,
+})
+
+const budget = (category: string, amount: number): Budget => ({
+  id: `budget-${category}`,
+  createdAt: stamp,
+  updatedAt: stamp,
+  schemaVersion: 1,
+  name: category,
+  category,
+  period: 'monthly',
+  amount,
+  rollover: false,
+  alertPercent: 85,
+  status: 'active',
+})
+
+const debt = (): Debt => ({
+  id: 'debt-1',
+  createdAt: stamp,
+  updatedAt: stamp,
+  schemaVersion: 1,
+  creditor: 'Banco',
+  name: 'Tarjeta',
+  originalAmount: 1000,
+  currentBalance: 600,
+  minimumPayment: 100,
+  type: 'Banco',
+  priority: 'Alta',
+})
+
+const obligation = (): Obligation => ({
+  id: 'obligation-1',
+  createdAt: stamp,
+  updatedAt: stamp,
+  schemaVersion: 1,
+  name: 'Servicio del carro',
+  estimatedAmount: 1000,
+  dueDate: '2026-09-01',
+  priority: 'Alta',
+  category: 'Vehiculo',
+  allocatedAmount: 500,
+  paidAmount: 0,
+  status: 'Parcialmente financiada',
+  recurrence: 'none',
+})
+
+const fund = (currentAmount: number): Fund => ({
+  id: 'fund-1',
+  createdAt: stamp,
+  updatedAt: stamp,
+  schemaVersion: 1,
+  name: 'Ahorro',
+  currentAmount,
+  status: 'active',
+  color: '#16a34a',
+})
+
+describe('finance calculations', () => {
+  it('calculates balances and keeps transfers neutral for income and expense reports', () => {
+    const accounts = [account('cash', 1000), account('bank', 200)]
+    const transfer = movement({ id: 'm1', accountId: 'cash', destinationAccountId: 'bank', type: 'Transferencia', amount: 150 })
+    const income = movement({ id: 'm2', accountId: 'cash', type: 'Ingreso', amount: 300 })
+    const expense = movement({ id: 'm3', accountId: 'bank', type: 'Gasto', amount: 50 })
+    const balances = calculateAccountBalances(accounts, [transfer, income, expense])
+    const summary = calculateFinancialSummary(accounts, [transfer, income, expense], [], [], [])
+
+    expect(movementImpactForAccount(transfer, 'cash')).toBe(-150)
+    expect(movementImpactForAccount(transfer, 'bank')).toBe(150)
+    expect(transferIsNeutral(transfer)).toBe(true)
+    expect(balances.find((item) => item.accountId === 'cash')?.calculatedBalance).toBe(1150)
+    expect(balances.find((item) => item.accountId === 'bank')?.calculatedBalance).toBe(300)
+    expect(summary.income).toBe(300)
+    expect(summary.expense).toBe(50)
+  })
+
+  it('subtracts active funds from free money', () => {
+    const summary = calculateFinancialSummary([account('cash', 1000)], [], [fund(250)], [], [])
+    expect(summary.totalLiquid).toBe(1000)
+    expect(summary.allocated).toBe(250)
+    expect(summary.freeMoney).toBe(750)
+  })
+
+  it('applies debt and obligation payments consistently', () => {
+    expect(applyDebtPayment(debt(), 200).currentBalance).toBe(400)
+    expect(() => applyDebtPayment(debt(), 700)).toThrow('saldo negativo')
+
+    const paid = applyObligationPayment(obligation(), 300, 300)
+    expect(paid.paidAmount).toBe(300)
+    expect(paid.allocatedAmount).toBe(200)
+    expect(paid.status).toBe('Parcialmente pagada')
+  })
+
+  it('calculates budget spending and paycheck distribution', () => {
+    const movements = [
+      movement({ id: 'food', accountId: 'cash', type: 'Gasto', amount: 125, category: 'Comida', dateTime: '2026-08-03T12:00:00.000Z' }),
+      movement({ id: 'old-food', accountId: 'cash', type: 'Gasto', amount: 50, category: 'Comida', dateTime: '2026-07-03T12:00:00.000Z' }),
+    ]
+    expect(budgetSpent(budget('Comida', 500), movements, '2026-08')).toBe(125)
+    expect(distributePaycheck(1000, [{ fundId: 'fund-1', amount: 400 }])).toEqual({ totalAllocated: 400, freeAmount: 600 })
+    expect(() => distributePaycheck(100, [{ fundId: 'fund-1', amount: 101 }])).toThrow('supera')
+  })
+})
+
+describe('habit and time calculations', () => {
+  it('scores habits without treating unregistered as a red failure', () => {
+    const training = habit('habit-1')
+    const reading = { ...habit('habit-2'), weight: 2 }
+    const result = calculateHabitDayScore([training, reading], [habitEntry('entry-1', 'habit-1', 30)], '2026-08-03')
+
+    expect(statusFromValue(training, 45)).toBe('excellent')
+    expect(result.score).toBe(1)
+    expect(result.possible).toBe(3)
+    expect(result.minimumPercent).toBe(0.5)
+    expect(dayColor(0, 3, false)).toBe('gray')
+    expect(dayColor(1, 3, true)).toBe('blue')
+  })
+
+  it('calculates effective work and sleep durations', () => {
+    expect(calculateWorkSessionDuration('2026-08-03T08:00:00.000Z', '2026-08-03T10:30:00.000Z', 20)).toEqual({
+      durationMinutes: 150,
+      effectiveMinutes: 130,
+    })
+    expect(calculateSleepDurationHours('2026-08-03T04:00:00.000Z', '2026-08-03T11:30:00.000Z', 30)).toBe(8)
+  })
+})
+
+describe('backup helpers', () => {
+  it('detects duplicate UUIDs before merging backup data', () => {
+    const baseData = {
+      settings: { id: 'settings-1' },
+      habits: [{ id: 'habit-1' }],
+      movements: [{ id: 'movement-1' }],
+    } as AppData
+    const incomingData = {
+      settings: { id: 'settings-2' },
+      habits: [{ id: 'habit-1' }, { id: 'habit-2' }],
+      movements: [{ id: 'movement-3' }],
+    } as AppData
+
+    expect(detectDuplicateIds(baseData, incomingData)).toEqual(['habit-1'])
+  })
+})
+
+describe('personal profile insights', () => {
+  it('calculates BMI from pounds and keeps legacy stored weight as pounds', () => {
+    const profile = getProfileSummary(
+      {
+        birthDate: '1992-08-03',
+        heightCm: 162,
+        weightKg: 202,
+      } as AppData['settings'],
+      new Date('2026-08-03T12:00:00.000Z'),
+    )
+
+    expect(profile.weightLb).toBe(202)
+    expect(profile.bodyMassIndex).toBe(34.9)
+    expect(profile.referenceWeightMinLb).toBeCloseTo(107, 1)
+    expect(profile.referenceWeightMaxLb).toBeCloseTo(144.1, 1)
+    expect(profile.referenceWeightTargetLb).toBeCloseTo(127.3, 1)
+  })
+
+  it('writes a concrete body summary with an initial weight target', () => {
+    const summary = bodyProfileSummary({
+      settings: {
+        ...createDefaultSettings(),
+        birthDate: '1992-08-03',
+        heightCm: 162,
+        weightLb: 202,
+        sleepGoalHours: 7,
+      },
+      trainingLogs: [],
+      mealLogs: [],
+      sleepLogs: [],
+    })
+
+    expect(summary.title).toBe('Tu peso requiere atencion.')
+    expect(summary.description).toContain('IMC de 34.9')
+    expect(summary.description).toContain('obesidad grado I')
+    expect(summary.description).toContain('meta inicial de 192 lb')
+  })
+})
