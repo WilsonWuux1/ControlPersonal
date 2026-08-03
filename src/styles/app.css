@@ -177,7 +177,11 @@ label input, label select, label textarea { color: var(--text); }
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   min-height: 44px; border-radius: 8px; padding: 10px 14px; border: 1px solid transparent; font-weight: 800;
 }
-.button-primary, .button-primary span, .button-primary svg { background: var(--primary); color: white; stroke: currentColor; }
+.button-primary, .button-primary span, .button-primary svg, a.button-primary, a.button-primary span, a.button-primary svg {
+  background: var(--primary);
+  color: white;
+  stroke: currentColor;
+}
 .button-secondary { background: var(--surface-soft); color: var(--text); border-color: var(--border); }
 .button-ghost { background: transparent; color: var(--text); border-color: var(--border); }
 .button-danger { background: var(--red); color: white; }
