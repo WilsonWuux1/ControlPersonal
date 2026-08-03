@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, Battery, CalendarDays, Check, Coins, Plus, ShieldCheck } from 'lucide-react'
+import { ArrowDown, ArrowUp, Battery, CalendarDays, Check, Coins, Moon, ShieldCheck, Sun } from 'lucide-react'
 import { Button } from '../../components/Button'
-import { QuickActionModal } from '../../components/QuickActionModal'
 import { StatCard } from '../../components/StatCard'
 import { useAppStore } from '../../stores/appStore'
 import { calculateFinancialSummary } from '../../services/financeCalculations'
@@ -16,7 +15,9 @@ export function DashboardPage() {
   const updatePriority = useAppStore((state) => state.updatePriority)
   const updateDailyCheckIn = useAppStore((state) => state.updateDailyCheckIn)
   const addMoodEnergyLog = useAppStore((state) => state.addMoodEnergyLog)
-  const [quick, setQuick] = useState(false)
+  const updateSettings = useAppStore((state) => state.updateSettings)
+  const addSleepLog = useAppStore((state) => state.addSleepLog)
+  const addToast = useAppStore((state) => state.addToast)
   const [priorityTitle, setPriorityTitle] = useState('')
   const [draftEnergy, setDraftEnergy] = useState(3)
   const [draftMood, setDraftMood] = useState(3)
@@ -65,6 +66,31 @@ export function DashboardPage() {
     await addMoodEnergyLog({ date: today, dateTime: nowIso(), energy: draftEnergy, mood: draftMood, source: 'dashboard' })
   }
 
+  const startSleep = async () => {
+    await updateSettings({ activeSleepStartedAt: nowIso() })
+    addToast({ title: 'Hora de dormir guardada', tone: 'success' })
+  }
+
+  const wakeUp = async () => {
+    if (!data.settings.activeSleepStartedAt) {
+      addToast({ title: 'No hay hora de dormir activa', detail: 'Presiona primero Me voy a dormir.', tone: 'warning' })
+      return
+    }
+    await addSleepLog({
+      date: today,
+      sleepAt: data.settings.activeSleepStartedAt,
+      wakeAt: nowIso(),
+      interruptions: 0,
+      napMinutes: 0,
+      durationHours: 0,
+      quality: 3,
+      wakeEnergy: draftEnergy,
+      lateWork: false,
+    })
+    await updateSettings({ activeSleepStartedAt: undefined })
+    addToast({ title: 'Sueno registrado', detail: 'Puedes ajustar detalles en Bienestar si lo necesitas.', tone: 'success' })
+  }
+
   return (
     <section className="page stack">
       <div className="hero-band">
@@ -76,10 +102,22 @@ export function DashboardPage() {
             {data.settings.lastBackupAt ? friendlyDate(data.settings.lastBackupAt) : 'sin respaldo registrado'}.
           </span>
         </div>
-        <Button onClick={() => setQuick(true)} icon={<Plus size={18} />}>
-          Accion rapida
-        </Button>
       </div>
+
+      <section className="sleep-capture compact">
+        <div>
+          <strong>{data.settings.activeSleepStartedAt ? 'Descanso activo' : 'Registro de sueno'}</strong>
+          <p>{data.settings.activeSleepStartedAt ? `Inicio: ${data.settings.activeSleepStartedAt.slice(11, 16)}` : 'Acciones rapidas para usar al dormir y al despertar.'}</p>
+        </div>
+        <div className="actions">
+          <Button aria-label="Iniciar sueno desde Hoy" variant="secondary" onClick={startSleep} icon={<Moon size={18} />} disabled={Boolean(data.settings.activeSleepStartedAt)}>
+            Me voy a dormir
+          </Button>
+          <Button aria-label="Finalizar sueno desde Hoy" onClick={wakeUp} icon={<Sun size={18} />} disabled={!data.settings.activeSleepStartedAt}>
+            Desperte
+          </Button>
+        </div>
+      </section>
 
       <div className="stat-grid">
         <StatCard label="Energia" value={`${checkIn?.energy ?? 3}/5`} icon={<Battery />} hint="Editable abajo" />
@@ -189,7 +227,6 @@ export function DashboardPage() {
           </p>
         </section>
       </div>
-      <QuickActionModal open={quick} onClose={() => setQuick(false)} />
     </section>
   )
 }

@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Plus, RefreshCw } from 'lucide-react'
+import { Menu, Plus, RefreshCw, X } from 'lucide-react'
 import { useState } from 'react'
 import { navItems } from '../routes/navigation'
 import { Button } from '../components/Button'
@@ -10,6 +10,7 @@ import { daysSince } from '../utils/date'
 
 export function AppLayout() {
   const [quickOpen, setQuickOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const online = useOnlineStatus()
   const location = useLocation()
   const settings = useAppStore((state) => state.data?.settings)
@@ -50,13 +51,26 @@ export function AppLayout() {
                 Respaldo pendiente
               </span>
             ) : null}
-            <Button onClick={() => setQuickOpen(true)} icon={<Plus size={18} />}>
+            <Button aria-label="Nuevo" onClick={() => setQuickOpen(true)} icon={<Plus size={18} />}>
               Nuevo
             </Button>
           </div>
         </header>
         <Outlet />
       </main>
+      {mobileMenuOpen ? (
+        <div className="mobile-more-menu">
+          {navItems.slice(5).map((item) => {
+            const Icon = item.icon
+            return (
+              <NavLink key={item.to} to={item.to} onClick={() => setMobileMenuOpen(false)}>
+                <Icon width={20} height={20} />
+                <span>{item.label}</span>
+              </NavLink>
+            )
+          })}
+        </div>
+      ) : null}
       <nav className="bottom-nav" aria-label="Navegacion movil">
         {navItems.slice(0, 5).map((item) => {
           const Icon = item.icon
@@ -67,10 +81,11 @@ export function AppLayout() {
             </NavLink>
           )
         })}
+        <button type="button" className={mobileMenuOpen ? 'active' : undefined} onClick={() => setMobileMenuOpen((open) => !open)}>
+          {mobileMenuOpen ? <X width={20} height={20} /> : <Menu width={20} height={20} />}
+          <span>Mas</span>
+        </button>
       </nav>
-      <button className="floating-action" type="button" aria-label="Registro rapido" onClick={() => setQuickOpen(true)}>
-        <Plus size={26} />
-      </button>
       <QuickActionModal open={quickOpen} onClose={() => setQuickOpen(false)} />
     </div>
   )

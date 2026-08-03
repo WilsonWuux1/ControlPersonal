@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useReactTable, getCoreRowModel, flexRender, createColumnHelper } from '@tanstack/react-table'
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Banknote, CreditCard, Download, Landmark, PiggyBank, Plus, Wallet } from 'lucide-react'
+import { Banknote, CreditCard, Download, Landmark, Minus, PiggyBank, Plus, Wallet, X } from 'lucide-react'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { StatCard } from '../../components/StatCard'
@@ -368,12 +368,12 @@ function FundControls({ fundId, onAllocate }: { fundId: string; onAllocate: (fun
   return (
     <div className="fund-controls">
       <input aria-label="Monto para fondo" type="number" min="0" value={amount} onChange={(event) => setAmount(Number(event.target.value))} />
-      <Button variant="secondary" onClick={() => onAllocate(fundId, amount)}>
-        Apartar
-      </Button>
-      <Button variant="ghost" onClick={() => onAllocate(fundId, -amount)}>
-        Liberar
-      </Button>
+      <button className="icon-button" type="button" aria-label="Apartar dinero" title="Apartar" onClick={() => onAllocate(fundId, amount)}>
+        <Plus size={18} />
+      </button>
+      <button className="icon-button" type="button" aria-label="Liberar dinero" title="Liberar" onClick={() => onAllocate(fundId, -amount)}>
+        <Minus size={18} />
+      </button>
     </div>
   )
 }
@@ -389,10 +389,14 @@ interface ObligationsPanelProps {
 
 function ObligationsPanel({ currency, accounts, funds, obligations, payObligation, updateObligation }: ObligationsPanelProps) {
   const [payments, setPayments] = useState<Record<string, { amount: string; accountId: string; fundId: string }>>({})
+  const [payingId, setPayingId] = useState<string | null>(null)
   const [cancelingObligation, setCancelingObligation] = useState<Obligation | null>(null)
   const firstAccount = accounts[0]?.id ?? ''
   const pendingObligations = obligations
-    .filter((obligation) => obligation.status !== 'Pagada' && obligation.status !== 'Cancelada')
+    .filter((obligation) => {
+      const total = obligation.finalAmount ?? obligation.estimatedAmount
+      return obligation.status !== 'Pagada' && obligation.status !== 'Cancelada' && Math.max(0, total - obligation.paidAmount) > 0
+    })
     .toSorted((a, b) => b.estimatedAmount - a.estimatedAmount)
 
   const updatePayment = (obligationId: string, key: 'amount' | 'accountId' | 'fundId', value: string) => {
@@ -425,44 +429,60 @@ function ObligationsPanel({ currency, accounts, funds, obligations, payObligatio
                 {obligation.status} - vence {obligation.dueDate} - {obligation.category}
               </span>
               <b>{formatCurrency(pending, currency)}</b>
-              <div className="form-grid three">
-                <label>
-                  Pagar
-                  <input type="number" min="0" value={form.amount} onChange={(event) => updatePayment(obligation.id, 'amount', event.target.value)} />
-                </label>
-                <label>
-                  Cuenta
-                  <select value={form.accountId} onChange={(event) => updatePayment(obligation.id, 'accountId', event.target.value)}>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Fondo opcional
-                  <select value={form.fundId} onChange={(event) => updatePayment(obligation.id, 'fundId', event.target.value)}>
-                    <option value="">Sin fondo</option>
-                    {funds.map((fund) => (
-                      <option key={fund.id} value={fund.id}>
-                        {fund.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className="actions">
-                <Button
-                  onClick={() => payObligation({ obligationId: obligation.id, accountId: form.accountId, fundId: form.fundId || undefined, amount: Number(form.amount || 0) })}
-                  disabled={!form.accountId || Number(form.amount || 0) <= 0}
-                >
-                  Registrar pago
-                </Button>
-                <Button variant="ghost" onClick={() => setCancelingObligation(obligation)}>
-                  Cancelar obligacion
-                </Button>
-              </div>
+              {payingId === obligation.id ? (
+                <>
+                  <div className="form-grid three">
+                    <label>
+                      Monto
+                      <input type="number" min="0" value={form.amount} onChange={(event) => updatePayment(obligation.id, 'amount', event.target.value)} />
+                    </label>
+                    <label>
+                      Cuenta
+                      <select value={form.accountId} onChange={(event) => updatePayment(obligation.id, 'accountId', event.target.value)}>
+                        {accounts.map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {account.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Fondo opcional
+                      <select value={form.fundId} onChange={(event) => updatePayment(obligation.id, 'fundId', event.target.value)}>
+                        <option value="">Sin fondo</option>
+                        {funds.map((fund) => (
+                          <option key={fund.id} value={fund.id}>
+                            {fund.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="actions">
+                    <Button
+                      onClick={async () => {
+                        await payObligation({ obligationId: obligation.id, accountId: form.accountId, fundId: form.fundId || undefined, amount: Number(form.amount || 0) })
+                        setPayingId(null)
+                      }}
+                      disabled={!form.accountId || Number(form.amount || 0) <= 0}
+                    >
+                      Registrar pago
+                    </Button>
+                    <Button variant="ghost" onClick={() => setPayingId(null)} icon={<X size={16} />}>
+                      Cerrar
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="actions">
+                  <Button variant="secondary" onClick={() => setPayingId(obligation.id)}>
+                    Pagar
+                  </Button>
+                  <Button variant="ghost" onClick={() => setCancelingObligation(obligation)}>
+                    Cancelar obligacion
+                  </Button>
+                </div>
+              )}
             </article>
           )
         })}

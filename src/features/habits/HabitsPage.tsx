@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Archive, CalendarCheck, Flame, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { Archive, CalendarCheck, Edit3, Flame, Plus, RotateCcw, Star, Target, Trash2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -42,6 +42,7 @@ export function HabitsPage() {
   const upsertEntry = useAppStore((state) => state.upsertHabitEntry)
   const [editing, setEditing] = useState<Habit | null>(null)
   const [deleting, setDeleting] = useState<Habit | null>(null)
+  const [showForm, setShowForm] = useState(false)
   const today = todayIso()
   const { register, handleSubmit, reset } = useForm<HabitInput, unknown, HabitForm>({
     resolver: zodResolver(habitSchema),
@@ -81,6 +82,7 @@ export function HabitsPage() {
         frequency: values.frequency as FrequencyType,
       })
       setEditing(null)
+      setShowForm(false)
     } else {
       await addHabit({
         ...values,
@@ -99,6 +101,7 @@ export function HabitsPage() {
 
   const openEdit = (habit: Habit) => {
     setEditing(habit)
+    setShowForm(true)
     reset(habit)
   }
 
@@ -110,14 +113,13 @@ export function HabitsPage() {
         <StatCard label="Objetivos cumplidos" value={percent(metrics.targetPercent)} icon={<Flame />} tone="gold" />
       </div>
       <div className="two-column">
+        {showForm ? (
         <section className="panel">
           <div className="panel-header">
             <h2>{editing ? 'Editar habito' : 'Crear habito'}</h2>
-            {editing ? (
-              <Button variant="ghost" onClick={() => setEditing(null)}>
+            <Button variant="ghost" onClick={() => { setEditing(null); setShowForm(false); reset() }}>
                 Cancelar
-              </Button>
-            ) : null}
+            </Button>
           </div>
           <form className="form-stack" onSubmit={handleSubmit(submit)}>
             <div className="form-grid two">
@@ -180,6 +182,17 @@ export function HabitsPage() {
             </Button>
           </form>
         </section>
+        ) : (
+          <section className="panel">
+            <div className="panel-header">
+              <h2>Habitos</h2>
+              <Button onClick={() => setShowForm(true)} icon={<Plus size={18} />}>
+                Crear habito
+              </Button>
+            </div>
+            <p className="muted">Crea o edita habitos solo cuando necesites cambiar tu sistema. El uso diario esta abajo.</p>
+          </section>
+        )}
 
         <section className="panel">
           <div className="panel-header">
@@ -217,32 +230,34 @@ export function HabitsPage() {
                 </div>
                 <div className="segmented">
                   {[
-                    { label: 'Min', value: habit.minimumValue },
-                    { label: 'Obj', value: habit.targetValue },
-                    { label: 'Exc', value: habit.excellentValue },
+                    { label: 'Base', value: habit.minimumValue, icon: <CalendarCheck size={18} /> },
+                    { label: 'Meta', value: habit.targetValue, icon: <Target size={18} /> },
+                    { label: 'Extra', value: habit.excellentValue, icon: <Star size={18} /> },
                   ].map((option) => (
                     <button
                       key={`${habit.id}-${option.label}-${option.value}`}
                       type="button"
+                      title={`${option.label}: ${option.value} ${habit.unit}`}
                       className={entry?.value === option.value ? 'active' : undefined}
                       onClick={() => upsertEntry({ habitId: habit.id, date: today, value: option.value, status: statusFromValue(habit, option.value) })}
                     >
+                      {option.icon}
                       <span>{option.label}</span>
                       <strong>{option.value}</strong>
                     </button>
                   ))}
                 </div>
                 <span className={`status-pill status-${entry?.status ?? 'unregistered'}`}>{entry?.status ?? 'sin registrar'}</span>
-                <div className="actions">
-                  <Button variant="ghost" onClick={() => openEdit(habit)}>
-                    Editar
-                  </Button>
-                  <Button variant="ghost" onClick={() => archiveHabit(habit.id)} icon={<Archive size={16} />}>
-                    Archivar
-                  </Button>
-                  <Button variant="ghost" onClick={() => setDeleting(habit)} icon={<Trash2 size={16} />}>
-                    Eliminar
-                  </Button>
+                <div className="icon-actions">
+                  <button type="button" aria-label={`Editar ${habit.name}`} title="Editar" onClick={() => openEdit(habit)}>
+                    <Edit3 size={18} />
+                  </button>
+                  <button type="button" aria-label={`Archivar ${habit.name}`} title="Archivar" onClick={() => archiveHabit(habit.id)}>
+                    <Archive size={18} />
+                  </button>
+                  <button type="button" aria-label={`Eliminar ${habit.name}`} title="Eliminar" onClick={() => setDeleting(habit)}>
+                    <Trash2 size={18} />
+                  </button>
                 </div>
               </article>
             )
