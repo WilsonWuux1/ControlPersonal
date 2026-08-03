@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, Battery, CalendarDays, Check, Coins, Moon, ShieldCheck, Sun } from 'lucide-react'
+import { ArrowDown, ArrowUp, Battery, CalendarDays, Check, Coins, Moon, Play, Quote, ShieldCheck, Sun } from 'lucide-react'
 import { Button } from '../../components/Button'
 import { StatCard } from '../../components/StatCard'
 import { useAppStore } from '../../stores/appStore'
@@ -40,6 +40,9 @@ export function DashboardPage() {
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0]
   const lastMeal = data.mealLogs.sort((a, b) => b.dateTime.localeCompare(a.dateTime))[0]
   const principle = data.principles.filter((item) => item.status === 'active')[new Date().getDate() % Math.max(1, data.principles.length)]
+  const motivationPool = data.motivationLinks.filter((item) => item.url && (item.favorite || !item.localNote))
+  const suggestedMotivation = motivationPool.length > 0 ? motivationPool[new Date().getDate() % motivationPool.length] : undefined
+  const lowState = (checkIn?.energy ?? draftEnergy) <= 2 || (checkIn?.mood ?? draftMood) <= 2
   const workMinutes = dailyEffectiveWorkMinutes(data.workSessions, today)
   const recovered = checkIn?.rescueCompleted ?? false
   const color = dayColor(habitScore.score, habitScore.possible, recovered)
@@ -64,6 +67,9 @@ export function DashboardPage() {
       rescueCompleted: checkIn?.rescueCompleted ?? false,
     })
     await addMoodEnergyLog({ date: today, dateTime: nowIso(), energy: draftEnergy, mood: draftMood, source: 'dashboard' })
+    if (draftEnergy <= 2 || draftMood <= 2) {
+      addToast({ title: 'Estado bajo registrado', detail: suggestedMotivation ? 'Te deje una motivacion sugerida en Hoy.' : 'Revisa tus acciones minimas para recuperar el dia.', tone: 'warning' })
+    }
   }
 
   const startSleep = async () => {
@@ -117,6 +123,32 @@ export function DashboardPage() {
             Desperte
           </Button>
         </div>
+      </section>
+
+      <section className="daily-focus-grid">
+        {principle ? (
+          <article className="daily-focus-card principle-focus">
+            <div>
+              <Quote size={20} />
+              <strong>Frase del dia</strong>
+            </div>
+            <p>{principle.text}</p>
+          </article>
+        ) : null}
+        {lowState && suggestedMotivation ? (
+          <article className="daily-focus-card motivation-focus">
+            <div>
+              <Play size={20} />
+              <strong>Animo bajo detectado</strong>
+            </div>
+            <p>{suggestedMotivation.title}</p>
+            {suggestedMotivation.personalNote ? <span>{suggestedMotivation.personalNote}</span> : null}
+            <a className="button button-primary" href={suggestedMotivation.url} target="_blank" rel="noreferrer">
+              <Play size={18} />
+              <span>Ver ahora</span>
+            </a>
+          </article>
+        ) : null}
       </section>
 
       <div className="stat-grid">
@@ -219,7 +251,6 @@ export function DashboardPage() {
           </div>
           <p>Ultima comida: {lastMeal ? `${lastMeal.mealType} - ${lastMeal.description}` : 'sin registros'}</p>
           <p>Proxima obligacion: {nextObligation ? `${nextObligation.name} (${friendlyDate(nextObligation.dueDate)})` : 'sin obligaciones pendientes'}</p>
-          <p>Principio del dia: {principle?.text}</p>
           {workMinutes > 600 ? <p className="notice warning">Superaste 10 horas de trabajo efectivo. Registra el dato, pero revisa el exceso de jornada.</p> : null}
           <p className="muted">
             Sueño reciente:{' '}
