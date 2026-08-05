@@ -107,10 +107,33 @@ export function MotivationPage() {
                   </a>
                 ) : null}
                 <div className="actions">
-                  <Button variant={link.favorite ? 'primary' : 'ghost'} onClick={() => updateMotivationLink({ ...link, favorite: !link.favorite })} icon={<Heart size={16} />}> 
-                  </Button>
-                  <Button variant="ghost" onClick={() => setDeletingLink(link)} icon={<Trash2 size={18} />}>
-                  </Button>
+                  <Button
+                    variant={link.favorite ? 'primary' : 'ghost'}
+                    aria-label={
+                      link.favorite
+                        ? 'Quitar de favoritos'
+                        : 'Marcar como favorito'
+                    }
+                    title={
+                      link.favorite
+                        ? 'Quitar de favoritos'
+                        : 'Marcar como favorito'
+                    }
+                    onClick={() =>
+                      updateMotivationLink({
+                        ...link,
+                        favorite: !link.favorite,
+                      })
+                    }
+                    icon={<Heart size={16} aria-hidden="true" />}
+                  />
+                  <Button
+                    variant="ghost"
+                    aria-label="Eliminar"
+                    title="Eliminar"
+                    onClick={() => setDeletingLink(link)}
+                    icon={<Trash2 size={18} aria-hidden="true" />}
+                  />
                 </div>
               </article>
             ))}
