@@ -302,6 +302,12 @@ label input, label select, label textarea { color: var(--text); }
 .mood-video-card .button {
   width: fit-content;
 }
+.mood-video-card .button,
+.mood-video-card .button span,
+.mood-video-card .button svg {
+  color: white;
+  stroke: currentColor;
+}
 .muted { color: var(--muted); }
 .habit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .habit-card { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border); border-left-width: 5px; border-radius: 8px; background: var(--surface-soft); }
@@ -365,8 +371,58 @@ th { color: var(--muted); font-size: .82rem; }
 .mobile-card { display: grid; gap: 5px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-soft); }
 .mobile-card span { color: var(--muted); }
 .mobile-card a { display: inline-flex; align-items: center; gap: 4px; color: var(--primary); font-weight: 800; }
-.fund-controls { display: grid; grid-template-columns: minmax(74px, 96px) 44px 44px; gap: 6px; align-items: center; }
-.fund-controls input { min-height: 40px; padding: 8px 10px; }
+.fund-controls {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.fund-controls input {
+  width: 96px;
+}
+
+.fund-icon {
+  flex: 0 0 auto;
+  cursor: pointer;
+  color: #64748b;
+  transition:
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.fund-icon:hover {
+  transform: scale(1.15);
+}
+
+.fund-icon:active {
+  transform: scale(0.9);
+}
+
+.fund-icon:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.fund-icon--add:hover {
+  color: #16a34a;
+}
+
+.fund-icon--remove:hover {
+  color: #f59e0b;
+}
+
+.fund-icon--delete:hover {
+  color: #dc2626;
+}
+
+.fund-icon[aria-disabled='true'] {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
 .icon-button,
 .icon-actions button {
   display: inline-grid;

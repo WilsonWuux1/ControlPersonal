@@ -119,7 +119,11 @@ export function DashboardPage() {
       <section className="sleep-capture compact">
         <div>
           <strong>{data.settings.activeSleepStartedAt ? 'Descanso activo' : 'Registro de sueno'}</strong>
-          <p>{data.settings.activeSleepStartedAt ? `Inicio: ${data.settings.activeSleepStartedAt.slice(11, 16)}` : 'Acciones rapidas para usar al dormir y al despertar.'}</p>
+          <p>
+            {data.settings.activeSleepStartedAt
+              ? `Inicio: ${new Date(data.settings.activeSleepStartedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+              : 'Acciones rapidas para usar al dormir y al despertar.'}
+          </p>
         </div>
         <div className="actions">
           <Button aria-label="Iniciar sueno desde Hoy" variant="secondary" onClick={startSleep} icon={<Moon size={18} />} disabled={Boolean(data.settings.activeSleepStartedAt)}>

@@ -325,8 +325,19 @@ export function ProgressPage() {
     .toSorted((a, b) => a.date.localeCompare(b.date))
     .map((log) => ({ fecha: shortDate(log.date), horas: log.durationHours, calidad: log.quality, energia: log.wakeEnergy }))
   const foodTrendData = filteredMealLogs
-    .toSorted((a, b) => a.dateTime.localeCompare(b.dateTime))
-    .map((log) => ({ fecha: shortDate(dateFromIso(log.dateTime)), hambre: log.hungerBefore, saciedad: log.satietyAfter, planificada: log.planned ? 5 : 0 }))
+  .toSorted((a, b) => a.dateTime.localeCompare(b.dateTime))
+  .map((log) => ({
+    clave: log.id,
+    etiqueta: new Date(log.dateTime).toLocaleString('es-GT', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    hambre: Number(log.hungerBefore),
+    saciedad: Number(log.satietyAfter),
+    planificada: log.planned ? 5 : 0,
+  }))
   const financeData = periodDates.map((date) => ({
     fecha: shortDate(date),
     ingresos: sumNumbers(filteredMovements.filter((movement) => dateFromIso(movement.dateTime) === date && (movement.type === 'Ingreso' || movement.type === 'Reembolso')).map((movement) => movement.amount)),
@@ -336,7 +347,16 @@ export function ProgressPage() {
     type,
     minutos: filteredRecreationLogs.filter((log) => log.type === type).reduce((sum, log) => sum + log.durationMinutes, 0),
   }))
-  const weightData = filteredWeightLogs.map((log) => ({ fecha: shortDate(log.date), peso: log.weightLb }))
+  const weightData = filteredWeightLogs.map((log) => ({
+  clave: log.id,
+  etiqueta: new Date(log.dateTime).toLocaleString('es-GT', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }),
+  peso: Number(log.weightLb),
+}))
 
   const profileLine = `${profile.age ? `${profile.age} anos` : 'edad pendiente'}, ${profile.heightCm ? `${profile.heightCm} cm` : 'altura pendiente'}, ${profile.weightLb ? `${profile.weightLb} lb` : 'peso pendiente'}`
   const bmiReferenceLine =
@@ -693,25 +713,181 @@ export function ProgressPage() {
           </LineChart>
         </ChartPanel>
         <ChartPanel title="Alimentacion consciente">
-          <LineChart data={foodTrendData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="fecha" interval="preserveStartEnd" />
-            <YAxis domain={[0, 5]} />
-            <Tooltip />
-            <Line dataKey="hambre" stroke="#f59e0b" strokeWidth={2} />
-            <Line dataKey="saciedad" stroke="#16a34a" strokeWidth={2} />
-            <Line dataKey="planificada" stroke="#2563eb" strokeWidth={2} />
-          </LineChart>
-        </ChartPanel>
+  <LineChart
+    data={foodTrendData}
+    margin={{ top: 10, right: 20, left: 0, bottom: 15 }}
+  >
+    <CartesianGrid strokeDasharray="3 3" />
+
+    <XAxis
+      dataKey="clave"
+      interval="preserveStartEnd"
+      tickFormatter={(clave) => {
+        const registro = foodTrendData.find(
+          (item) => item.clave === String(clave),
+        )
+
+        return registro?.etiqueta ?? ''
+      }}
+    />
+
+    <YAxis
+      domain={[0, 5]}
+      ticks={[0, 1, 2, 3, 4, 5]}
+      allowDecimals={false}
+    />
+
+    <Tooltip
+      cursor={{
+        stroke: '#94a3b8',
+        strokeDasharray: '3 3',
+      }}
+      wrapperStyle={{
+        zIndex: 1000,
+        pointerEvents: 'none',
+      }}
+      labelFormatter={(clave) => {
+        const registro = foodTrendData.find(
+          (item) => item.clave === String(clave),
+        )
+
+        return registro ? `Fecha: ${registro.etiqueta}` : ''
+      }}
+      formatter={(value, name) => [
+        `${Number(value)}/5`,
+        String(name),
+      ]}
+    />
+
+    <Line
+      dataKey="hambre"
+      name="Hambre"
+      type="monotone"
+      stroke="#f59e0b"
+      strokeWidth={2}
+      isAnimationActive={false}
+      dot={{
+        r: 4,
+        stroke: '#f59e0b',
+        strokeWidth: 2,
+        fill: '#fff',
+      }}
+      activeDot={{
+        r: 7,
+        stroke: '#f59e0b',
+        strokeWidth: 2,
+        fill: '#fff',
+      }}
+    />
+
+    <Line
+      dataKey="saciedad"
+      name="Saciedad"
+      type="monotone"
+      stroke="#16a34a"
+      strokeWidth={2}
+      isAnimationActive={false}
+      dot={{
+        r: 4,
+        stroke: '#16a34a',
+        strokeWidth: 2,
+        fill: '#fff',
+      }}
+      activeDot={{
+        r: 7,
+        stroke: '#16a34a',
+        strokeWidth: 2,
+        fill: '#fff',
+      }}
+    />
+
+    <Line
+      dataKey="planificada"
+      name="Planificada"
+      type="monotone"
+      stroke="#2563eb"
+      strokeWidth={2}
+      isAnimationActive={false}
+      dot={{
+        r: 4,
+        stroke: '#2563eb',
+        strokeWidth: 2,
+        fill: '#fff',
+      }}
+      activeDot={{
+        r: 7,
+        stroke: '#2563eb',
+        strokeWidth: 2,
+        fill: '#fff',
+      }}
+    />
+  </LineChart>
+</ChartPanel>
         <ChartPanel title="Peso">
-          <LineChart data={weightData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="fecha" interval="preserveStartEnd" />
-            <YAxis domain={['dataMin - 5', 'dataMax + 5']} />
-            <Tooltip formatter={(value) => `${Number(value)} lb`} />
-            <Line dataKey="peso" name="Peso" stroke="#0f766e" strokeWidth={2} />
-          </LineChart>
-        </ChartPanel>
+  <LineChart
+    data={weightData}
+    margin={{ top: 10, right: 20, left: 0, bottom: 15 }}
+  >
+    <CartesianGrid strokeDasharray="3 3" />
+
+    <XAxis
+      dataKey="clave"
+      interval="preserveStartEnd"
+      tickFormatter={(clave) => {
+        const registro = weightData.find(
+          (item) => item.clave === String(clave),
+        )
+
+        return registro?.etiqueta ?? ''
+      }}
+    />
+
+    <YAxis domain={['dataMin - 5', 'dataMax + 5']} />
+
+    <Tooltip
+      cursor={{
+        stroke: '#94a3b8',
+        strokeDasharray: '3 3',
+      }}
+      wrapperStyle={{
+        zIndex: 1000,
+        pointerEvents: 'none',
+      }}
+      labelFormatter={(clave) => {
+        const registro = weightData.find(
+          (item) => item.clave === String(clave),
+        )
+
+        return registro ? `Fecha: ${registro.etiqueta}` : ''
+      }}
+      formatter={(value) => [
+        `${Number(value).toFixed(1)} lb`,
+        'Peso',
+      ]}
+    />
+
+    <Line
+      dataKey="peso"
+      name="Peso"
+      type="monotone"
+      stroke="#0f766e"
+      strokeWidth={3}
+      isAnimationActive={false}
+      dot={{
+        r: 6,
+        stroke: '#0f766e',
+        strokeWidth: 2,
+        fill: '#fff',
+      }}
+      activeDot={{
+        r: 9,
+        stroke: '#0f766e',
+        strokeWidth: 3,
+        fill: '#fff',
+      }}
+    />
+  </LineChart>
+</ChartPanel>
         <ChartPanel title="Ingresos y gastos">
           <BarChart data={financeData}>
             <CartesianGrid strokeDasharray="3 3" />

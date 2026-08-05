@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useReactTable, getCoreRowModel, flexRender, createColumnHelper } from '@tanstack/react-table'
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Banknote, CreditCard, Download, Landmark, Minus, PiggyBank, Plus, Wallet, X } from 'lucide-react'
+import { Banknote, CreditCard, Download, Landmark, Minus, PiggyBank, Plus, Trash2, Wallet, X } from 'lucide-react'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { StatCard } from '../../components/StatCard'
 import { useAppStore } from '../../stores/appStore'
-import { calculateAccountBalances, calculateFinancialSummary, distributePaycheck } from '../../services/financeCalculations'
+import { calculateAccountBalances, calculateFinancialSummary, distributePaycheck, budgetSpent } from '../../services/financeCalculations'
 import { formatCurrency } from '../../utils/format'
 import { dateTimeLocalValue, fromDateTimeLocal, monthKey, nowIso, todayIso } from '../../utils/date'
 import type { AppData, FinancialMovement, Obligation } from '../../types/domain'
@@ -25,9 +25,11 @@ export function FinancesPage() {
   const addBudget = useAppStore((state) => state.addBudget)
   const addObligation = useAppStore((state) => state.addObligation)
   const updateObligation = useAppStore((state) => state.updateObligation)
+  const deleteBudget = useAppStore((state) => state.deleteBudget)
   const addDebt = useAppStore((state) => state.addDebt)
   const addFund = useAppStore((state) => state.addFund)
   const allocateFund = useAppStore((state) => state.allocateFund)
+  const deleteFund = useAppStore((state) => state.deleteFund)
   const payObligation = useAppStore((state) => state.payObligation)
   const payDebt = useAppStore((state) => state.payDebt)
   const [filter, setFilter] = useState('')
@@ -40,6 +42,18 @@ export function FinancesPage() {
   )
   const balances = useMemo(() => calculateAccountBalances(data.accounts, data.movements), [data.accounts, data.movements])
   const balanceByAccount = useMemo(() => new Map(balances.map((balance) => [balance.accountId, balance.calculatedBalance])), [balances])
+  const budgetSummaries = useMemo(
+    () =>
+      data.budgets.map((budget) => {
+        const spent = budgetSpent(budget, data.movements, monthKey(nowIso()))
+        return {
+          ...budget,
+          spent,
+          remaining: budget.amount - spent,
+        }
+      }),
+    [data.budgets, data.movements],
+  )
   const filteredMovements = useMemo(
     () =>
       data.movements
@@ -59,8 +73,7 @@ export function FinancesPage() {
         id: 'actions',
         header: '',
         cell: (info) => (
-          <Button variant="ghost" onClick={() => setDeletingMovement(info.row.original)}>
-            Eliminar
+          <Button variant="ghost" className="icon-button" onClick={() => setDeletingMovement(info.row.original)} icon={<Trash2 size={18} />}> 
           </Button>
         ),
       }),
@@ -163,12 +176,40 @@ export function FinancesPage() {
                 <span className="dot" style={{ background: fund.color }} />
                 <span>{fund.name}</span>
                 <strong>{formatCurrency(fund.currentAmount, data.settings.currency)}</strong>
-                <FundControls fundId={fund.id} onAllocate={allocateFund} />
+                <FundControls fundId={fund.id} onAllocate={allocateFund} onDelete={deleteFund} />
               </div>
             ))}
           </div>
         </section>
       </div>
+
+      <section className="panel">
+        <div className="panel-header">
+          <h2>Presupuestos</h2>
+          <span>Estos son los presupuestos registrados y su gasto del mes actual.</span>
+        </div>
+        <div className="list">
+          {budgetSummaries.length === 0 ? (
+            <p className="muted">No hay presupuestos registrados.</p>
+          ) : (
+            budgetSummaries.map((budget) => (
+              <div className="list-row" key={budget.id}>
+                <span className="dot" />
+                <span>
+                  {budget.name} • {budget.category}
+                   
+                </span>
+                <div className="budget-values">
+                  <strong>{formatCurrency(budget.amount, data.settings.currency)}</strong>
+                  
+                </div>
+                <Button variant="ghost" className="icon-button" onClick={() => deleteBudget(budget.id)} icon={<Trash2 size={18} />}> 
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
 
       <ObligationsPanel
         currency={data.settings.currency}
@@ -363,17 +404,62 @@ interface SimpleFinanceModalProps {
   updateObligation: ReturnType<typeof useAppStore.getState>['updateObligation']
 }
 
-function FundControls({ fundId, onAllocate }: { fundId: string; onAllocate: (fundId: string, amount: number) => Promise<void> }) {
+function FundControls({ fundId, onAllocate, onDelete }: { fundId: string; onAllocate: (fundId: string, amount: number) => Promise<void>; onDelete: (fundId: string) => Promise<void> }) {
   const [amount, setAmount] = useState(100)
   return (
     <div className="fund-controls">
       <input aria-label="Monto para fondo" type="number" min="0" value={amount} onChange={(event) => setAmount(Number(event.target.value))} />
-      <button className="icon-button" type="button" aria-label="Apartar dinero" title="Apartar" onClick={() => onAllocate(fundId, amount)}>
-        <Plus size={18} />
-      </button>
-      <button className="icon-button" type="button" aria-label="Liberar dinero" title="Liberar" onClick={() => onAllocate(fundId, -amount)}>
-        <Minus size={18} />
-      </button>
+
+      <Plus
+        size={20}
+        className="fund-icon fund-icon--add"
+        role="button"
+        tabIndex={amount > 0 ? 0 : -1}
+        aria-label="Apartar dinero"
+        aria-disabled={amount <= 0}
+        onClick={() => {
+          if (amount > 0) void onAllocate(fundId, amount)
+        }}
+        onKeyDown={(event) => {
+          if (amount > 0 && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault()
+            void onAllocate(fundId, amount)
+          }
+        }}
+      />
+
+      <Minus
+        size={20}
+        className="fund-icon fund-icon--remove"
+        role="button"
+        tabIndex={amount > 0 ? 0 : -1}
+        aria-label="Liberar dinero"
+        aria-disabled={amount <= 0}
+        onClick={() => {
+          if (amount > 0) void onAllocate(fundId, -amount)
+        }}
+        onKeyDown={(event) => {
+          if (amount > 0 && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault()
+            void onAllocate(fundId, -amount)
+          }
+        }}
+      />
+
+      <Trash2
+        size={20}
+        className="fund-icon fund-icon--delete"
+        role="button"
+        tabIndex={0}
+        aria-label="Eliminar fondo"
+        onClick={() => void onDelete(fundId)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            void onDelete(fundId)
+          }
+        }}
+      />
     </div>
   )
 }
@@ -468,18 +554,16 @@ function ObligationsPanel({ currency, accounts, funds, obligations, payObligatio
                     >
                       Registrar pago
                     </Button>
-                    <Button variant="ghost" onClick={() => setPayingId(null)} icon={<X size={16} />}>
-                      Cerrar
+                    <Button variant="ghost" onClick={() => setPayingId(null)} className="icon-button"  icon={<X size={16} />}>
+                       
                     </Button>
                   </div>
                 </>
               ) : (
                 <div className="actions">
-                  <Button variant="secondary" onClick={() => setPayingId(obligation.id)}>
-                    Pagar
+                  <Button variant="secondary" className="icon-button"  onClick={() => setPayingId(obligation.id)} icon={<Plus size={16} />}> 
                   </Button>
-                  <Button variant="ghost" onClick={() => setCancelingObligation(obligation)}>
-                    Cancelar obligacion
+                  <Button variant="ghost" onClick={() => setCancelingObligation(obligation)} className="icon-button" icon={<Trash2 size={16} />}> 
                   </Button>
                 </div>
               )}

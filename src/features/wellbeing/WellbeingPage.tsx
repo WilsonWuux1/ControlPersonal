@@ -28,7 +28,28 @@ export function WellbeingPage() {
   const creativeMinutes = data.recreationLogs.filter((log) => log.type === 'Creacion de contenido').reduce((sum, log) => sum + log.durationMinutes, 0)
   const scrollMinutes = data.recreationLogs.filter((log) => log.type === 'Desplazamiento automatico').reduce((sum, log) => sum + log.durationMinutes, 0)
   const sleepData = data.sleepLogs.slice(-14).map((log) => ({ fecha: log.date.slice(5), horas: log.durationHours, energia: log.wakeEnergy }))
-  const foodData = data.mealLogs.slice(-14).map((log) => ({ fecha: log.dateTime.slice(5, 10), hambre: log.hungerBefore, saciedad: log.satietyAfter }))
+  const foodData = data.mealLogs
+  .slice(-14)
+  .map((log) => ({
+    clave: log.id,
+    fechaHora: log.dateTime,
+    etiqueta: new Date(log.dateTime).toLocaleString('es-GT', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    hambre: Number(log.hungerBefore),
+    saciedad: Number(log.satietyAfter),
+  }))
+  const formatTime = (value: string) => new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const formatDate = (value: string) => new Date(value).toLocaleDateString([], { day: '2-digit', month: '2-digit' })
+  const recentSleepLogs = data.sleepLogs
+    .toSorted((a, b) => a.date.localeCompare(b.date))
+    .slice(-7)
+  const recentMealLogs = data.mealLogs
+    .toSorted((a, b) => a.dateTime.localeCompare(b.dateTime))
+    .slice(-7)
   const recommendations = recommendationSeed(data).slice(0, 4)
   const lowMoodMotivation = motivationForLowMood(data)
 
@@ -150,15 +171,71 @@ export function WellbeingPage() {
             <h2>Alimentacion consciente</h2>
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={foodData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="fecha" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="hambre" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="saciedad" fill="#16a34a" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+  <BarChart
+    data={foodData}
+    accessibilityLayer={false}
+    margin={{ top: 10, right: 10, left: 0, bottom: 15 }}
+  >
+    <CartesianGrid strokeDasharray="3 3" />
+
+    <XAxis
+      dataKey="clave"
+      tickFormatter={(clave) => {
+        const registro = foodData.find(
+          (item) => item.clave === String(clave),
+        )
+
+        return registro?.etiqueta ?? ''
+      }}
+      interval="preserveStartEnd"
+    />
+
+    <YAxis
+      domain={[0, 5]}
+      ticks={[0, 1, 2, 3, 4, 5]}
+      allowDecimals={false}
+    />
+
+    <Tooltip
+      trigger="hover"
+      shared={false}
+      cursor={{ fill: 'rgba(37, 99, 235, 0.08)' }}
+      wrapperStyle={{
+        zIndex: 1000,
+        pointerEvents: 'none',
+      }}
+      labelFormatter={(clave) => {
+        const registro = foodData.find(
+          (item) => item.clave === String(clave),
+        )
+
+        return registro
+          ? `Fecha: ${registro.etiqueta}`
+          : ''
+      }}
+      formatter={(value, name) => [
+        `${Number(value)}/5`,
+        String(name),
+      ]}
+    />
+
+    <Bar
+      dataKey="hambre"
+      name="Hambre antes"
+      fill="#f59e0b"
+      radius={[6, 6, 0, 0]}
+      isAnimationActive={false}
+    />
+
+    <Bar
+      dataKey="saciedad"
+      name="Saciedad después"
+      fill="#16a34a"
+      radius={[6, 6, 0, 0]}
+      isAnimationActive={false}
+    />
+  </BarChart>
+</ResponsiveContainer>
         </section>
       </div>
       <section className="panel">
@@ -184,19 +261,43 @@ export function WellbeingPage() {
       </section>
       <section className="panel">
         <div className="panel-header">
-          <h2>Registros recientes</h2>
-          <span>Seguimiento personal de tus registros diarios.</span>
+          <h2>Horarios de sueño</h2>
+          <span>Últimos registros con horario de inicio, fin y duración.</span>
         </div>
-        <div className="mobile-card-list">
-          {[...data.sleepLogs, ...data.mealLogs, ...data.trainingLogs, ...data.careLogs, ...data.socialLogs, ...data.recreationLogs].slice(-12).map((item) => (
-            <article key={item.id} className="mobile-card">
-              <strong>{'date' in item ? item.date : item.dateTime.slice(0, 10)}</strong>
-              <span>{'description' in item ? item.description : 'type' in item ? item.type : 'Registro'}</span>
-            </article>
-          ))}
+        <div className="list">
+          {recentSleepLogs.length === 0 ? (
+            <p className="muted">No hay registros de sueño.</p>
+          ) : (
+            recentSleepLogs.map((log) => (
+              <div key={log.id} className="list-row">
+                <span>{formatDate(`${log.date}T00:00:00`)} ({log.date})</span>
+                <strong>{`${formatTime(log.sleepAt)} - ${formatTime(log.wakeAt)}`}</strong>
+                <span>{`${log.durationHours.toFixed(1)} h`}</span>
+              </div>
+            ))
+          )}
         </div>
       </section>
 
+      <section className="panel">
+        <div className="panel-header">
+          <h2>Horarios de alimentación</h2>
+          <span>Últimas comidas con hora y tipo de registro.</span>
+        </div>
+        <div className="list">
+          {recentMealLogs.length === 0 ? (
+            <p className="muted">No hay registros de alimentación.</p>
+          ) : (
+            recentMealLogs.map((meal) => (
+              <div key={meal.id} className="list-row">
+                <span>{formatDate(meal.dateTime)}</span>
+                <strong>{formatTime(meal.dateTime)}</strong>
+                <span>{meal.mealType}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
 
       <QuickActionModal open={quick} onClose={() => setQuick(false)} initialTab="meal" />
     </section>

@@ -92,11 +92,13 @@ interface AppStore {
   updateMovement: (movement: FinancialMovement) => Promise<void>
   deleteMovement: (id: string) => Promise<void>
   addBudget: (budget: EntityDraft<Budget>) => Promise<void>
+  deleteBudget: (id: string) => Promise<void>
   addObligation: (obligation: EntityDraft<Obligation>) => Promise<void>
   updateObligation: (obligation: Obligation) => Promise<void>
   addDebt: (debt: EntityDraft<Debt>) => Promise<void>
   addFund: (fund: EntityDraft<Fund>) => Promise<void>
   allocateFund: (fundId: string, amount: number) => Promise<void>
+  deleteFund: (id: string) => Promise<void>
   payObligation: (payload: { obligationId: string; accountId: string; amount: number; fundId?: string }) => Promise<void>
   payDebt: (payload: { debtId: string; accountId: string; amount: number }) => Promise<void>
   addPrinciple: (principle: EntityDraft<Principle>) => Promise<void>
@@ -318,6 +320,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     await db.budgets.add(record)
     if (!updateLoadedData(set, (data) => ({ ...data, budgets: [...data.budgets, record] }))) await refresh(set)
   },
+  deleteBudget: async (id) => {
+    await db.budgets.delete(id)
+    if (!updateLoadedData(set, (data) => ({ ...data, budgets: data.budgets.filter((budget) => budget.id !== id) }))) await refresh(set)
+  },
   addObligation: async (obligation) => {
     const record = withBase<Obligation>(obligation)
     const saved = { ...record, status: obligationStatus(record) }
@@ -345,6 +351,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const record = { ...fund, currentAmount: Math.max(0, fund.currentAmount + amount), updatedAt: nowIso() }
     await db.funds.put(record)
     if (!updateLoadedData(set, (data) => ({ ...data, funds: data.funds.map((item) => (item.id === record.id ? record : item)) }))) await refresh(set)
+  },
+  deleteFund: async (id) => {
+    await db.funds.delete(id)
+    if (!updateLoadedData(set, (data) => ({ ...data, funds: data.funds.filter((fund) => fund.id !== id) }))) await refresh(set)
   },
   payObligation: async ({ obligationId, accountId, amount, fundId }) => {
     const obligation = await db.obligations.get(obligationId)

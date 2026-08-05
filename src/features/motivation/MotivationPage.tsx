@@ -107,11 +107,9 @@ export function MotivationPage() {
                   </a>
                 ) : null}
                 <div className="actions">
-                  <Button variant={link.favorite ? 'primary' : 'ghost'} onClick={() => updateMotivationLink({ ...link, favorite: !link.favorite })} icon={<Heart size={16} />}>
-                    Favorito
+                  <Button variant={link.favorite ? 'primary' : 'ghost'} onClick={() => updateMotivationLink({ ...link, favorite: !link.favorite })} icon={<Heart size={16} />}> 
                   </Button>
-                  <Button variant="ghost" onClick={() => setDeletingLink(link)} icon={<Trash2 size={16} />}>
-                    Eliminar
+                  <Button variant="ghost" onClick={() => setDeletingLink(link)} icon={<Trash2 size={18} />}>
                   </Button>
                 </div>
               </article>
