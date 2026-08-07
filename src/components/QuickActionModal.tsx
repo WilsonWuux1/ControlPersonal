@@ -416,18 +416,61 @@ function SleepQuickForm({ onDone }: { onDone: () => void }) {
   const addSleepLog = useAppStore((state) => state.addSleepLog)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const addToast = useAppStore((state) => state.addToast)
+
   const [wakeAt, setWakeAt] = useState<string | null>(null)
+  const [manualMode, setManualMode] = useState(false)
+  const [manualSleepAt, setManualSleepAt] = useState('')
+  const [manualWakeAt, setManualWakeAt] = useState(dateTimeLocalValue())
+
   type SleepInput = z.input<typeof sleepSchema>
   type SleepOutput = z.output<typeof sleepSchema>
-  const { register, handleSubmit } = useForm<SleepInput, unknown, SleepOutput>({
+
+  const { register, handleSubmit } = useForm<
+    SleepInput,
+    unknown,
+    SleepOutput
+  >({
     resolver: zodResolver(sleepSchema),
-    defaultValues: { interruptions: 0, quality: 3, wakeEnergy: 3, lateWork: false },
+    defaultValues: {
+      interruptions: 0,
+      quality: 3,
+      wakeEnergy: 3,
+      lateWork: false,
+    },
   })
+
   const sleepAt = data?.settings.activeSleepStartedAt
+
   const currentWakeAt = wakeAt ?? nowIso()
-  const previewHours = sleepAt ? calculateSleepDurationHours(sleepAt, currentWakeAt, 0) : 0
+
+  const previewHours = sleepAt
+    ? calculateSleepDurationHours(
+        sleepAt,
+        currentWakeAt,
+        0,
+      )
+    : 0
+
+  const manualSleepIso = manualSleepAt
+    ? fromDateTimeLocal(manualSleepAt)
+    : ''
+
+  const manualWakeIso = manualWakeAt
+    ? fromDateTimeLocal(manualWakeAt)
+    : ''
+
+  const manualPreviewHours =
+    manualSleepIso && manualWakeIso
+      ? calculateSleepDurationHours(
+          manualSleepIso,
+          manualWakeIso,
+          0,
+        )
+      : 0
+
   const submit = async (values: SleepOutput) => {
     if (!sleepAt || !wakeAt) return
+
     await addSleepLog({
       ...values,
       date: wakeAt.slice(0, 10),
@@ -436,44 +479,283 @@ function SleepQuickForm({ onDone }: { onDone: () => void }) {
       napMinutes: 0,
       durationHours: 0,
     })
-    await updateSettings({ activeSleepStartedAt: undefined })
-    addToast({ title: 'Sueno registrado', detail: `${previewHours} h dormidas`, tone: 'success' })
+
+    await updateSettings({
+      activeSleepStartedAt: undefined,
+    })
+
+    addToast({
+      title: 'Sueño registrado',
+      detail: `${previewHours} h dormidas`,
+      tone: 'success',
+    })
+
     onDone()
   }
 
+  const submitManual = async (values: SleepOutput) => {
+    if (!manualSleepAt || !manualWakeAt) {
+      addToast({
+        title: 'Completa las horas',
+        detail:
+          'Indica aproximadamente cuándo te dormiste y cuándo despertaste.',
+        tone: 'warning',
+      })
+
+      return
+    }
+
+    const sleepTime = new Date(manualSleepIso).getTime()
+    const wakeTime = new Date(manualWakeIso).getTime()
+
+    if (
+      !Number.isFinite(sleepTime) ||
+      !Number.isFinite(wakeTime) ||
+      wakeTime <= sleepTime
+    ) {
+      addToast({
+        title: 'Horario de sueño no válido',
+        detail:
+          'La hora de despertar debe ser posterior a la hora de dormir.',
+        tone: 'warning',
+      })
+
+      return
+    }
+
+    await addSleepLog({
+      ...values,
+      // Se usa la fecha local elegida en el campo,
+      // para que un despertar cercano a medianoche no cambie de día por UTC.
+      date: manualWakeAt.slice(0, 10),
+      sleepAt: manualSleepIso,
+      wakeAt: manualWakeIso,
+      napMinutes: 0,
+      durationHours: 0,
+    })
+
+    addToast({
+      title: 'Sueño registrado manualmente',
+      detail: `${manualPreviewHours} h dormidas`,
+      tone: 'success',
+    })
+
+    onDone()
+  }
+
+  /*
+   * Si NO hay un sueño activo, mantenemos intacta la acción rápida
+   * "Me voy a dormir", pero también ofrecemos el registro manual.
+   */
   if (!sleepAt) {
+    if (manualMode) {
+      return (
+        <form
+          className="form-stack"
+          onSubmit={handleSubmit(submitManual)}
+        >
+          <div className="sleep-capture">
+            <strong>Registro manual</strong>
+
+            <p>
+              Úsalo cuando olvidaste presionar “Me voy a dormir”.
+              Puedes colocar una hora aproximada de inicio y la hora
+              en que despertaste.
+            </p>
+          </div>
+
+          <label>
+            Me dormí aproximadamente
+
+            <input
+              type="datetime-local"
+              value={manualSleepAt}
+              max={manualWakeAt || undefined}
+              onChange={(event) =>
+                setManualSleepAt(event.target.value)
+              }
+            />
+          </label>
+
+          <label>
+            Desperté
+
+            <input
+              type="datetime-local"
+              value={manualWakeAt}
+              min={manualSleepAt || undefined}
+              onChange={(event) =>
+                setManualWakeAt(event.target.value)
+              }
+            />
+          </label>
+
+          {manualSleepAt && manualWakeAt ? (
+            <div className="sleep-capture compact">
+              <div>
+                <strong>
+                  {manualPreviewHours} h estimadas
+                </strong>
+
+                <p>
+                  Revisa las horas antes de guardar el registro.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          <label>
+            Interrupciones
+
+            <select {...register('interruptions')}>
+              <option value="0">Ninguna</option>
+              <option value="1">Una vez</option>
+              <option value="2">Dos veces</option>
+              <option value="3">Tres o más</option>
+            </select>
+          </label>
+
+          <label>
+            Calidad del sueño
+
+            <select {...register('quality')}>
+              {qualityOptions.map((option) => (
+                <option
+                  key={option.value}
+                  value={option.value}
+                >
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Energía al despertar
+
+            <select {...register('wakeEnergy')}>
+              {qualityOptions.map((option) => (
+                <option
+                  key={option.value}
+                  value={option.value}
+                >
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="check-row">
+            <input
+              type="checkbox"
+              {...register('lateWork')}
+            />
+            Trabajé de madrugada
+          </label>
+
+          <label>
+            Notas
+
+            <textarea {...register('notes')} />
+          </label>
+
+          <div className="actions">
+            <Button type="submit">
+              Guardar sueño
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setManualMode(false)}
+            >
+              Volver
+            </Button>
+          </div>
+        </form>
+      )
+    }
+
     return (
       <div className="form-stack">
         <div className="sleep-capture">
           <strong>Registrar al momento</strong>
-          <p>Presiona el boton cuando ya te vas a dormir. La hora queda guardada hasta que marques que despertaste.</p>
-          <Button
-            onClick={async () => {
-              await updateSettings({ activeSleepStartedAt: nowIso() })
-              addToast({ title: 'Hora de dormir guardada', detail: 'Cuando despiertes, vuelve aqui y marca Desperte.', tone: 'success' })
-              onDone()
-            }}
-          >
-            Me voy a dormir
-          </Button>
+
+          <p>
+            Presiona el botón cuando ya te vas a dormir.
+            La hora queda guardada hasta que marques que
+            despertaste.
+          </p>
+
+          <div className="actions">
+            <Button
+              onClick={async () => {
+                await updateSettings({
+                  activeSleepStartedAt: nowIso(),
+                })
+
+                addToast({
+                  title: 'Hora de dormir guardada',
+                  detail:
+                    'Cuando despiertes, vuelve aquí y marca Desperté.',
+                  tone: 'success',
+                })
+
+                onDone()
+              }}
+            >
+              Me voy a dormir
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={() => setManualMode(true)}
+            >
+              Registrar manualmente
+            </Button>
+          </div>
         </div>
+
+        <p className="muted">
+          El registro manual sirve cuando olvidaste iniciar
+          el sueño en el momento.
+        </p>
       </div>
     )
   }
 
+  /*
+   * Si ya existe una hora de inicio guardada,
+   * el flujo rápido original sigue exactamente igual.
+   */
   if (!wakeAt) {
     return (
       <div className="form-stack">
         <div className="sleep-capture">
-          <strong>Sueno en curso</strong>
-          <p>Inicio guardado: {new Date(sleepAt).toLocaleString()}.</p>
+          <strong>Sueño en curso</strong>
+
+          <p>
+            Inicio guardado:{' '}
+            {new Date(sleepAt).toLocaleString()}.
+          </p>
+
           <div className="actions">
-            <Button onClick={() => setWakeAt(nowIso())}>Desperte</Button>
+            <Button onClick={() => setWakeAt(nowIso())}>
+              Desperté
+            </Button>
+
             <Button
               variant="ghost"
               onClick={async () => {
-                await updateSettings({ activeSleepStartedAt: undefined })
-                addToast({ title: 'Registro de sueno cancelado', tone: 'info' })
+                await updateSettings({
+                  activeSleepStartedAt: undefined,
+                })
+
+                addToast({
+                  title: 'Registro de sueño cancelado',
+                  tone: 'info',
+                })
+
                 onDone()
               }}
             >
@@ -486,51 +768,77 @@ function SleepQuickForm({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <form className="form-stack" onSubmit={handleSubmit(submit)}>
+    <form
+      className="form-stack"
+      onSubmit={handleSubmit(submit)}
+    >
       <div className="sleep-capture">
         <strong>{previewHours} h registradas</strong>
+
         <p>
-          Dormi: {new Date(sleepAt).toLocaleString()} - Desperte: {new Date(wakeAt).toLocaleString()}.
+          Dormí: {new Date(sleepAt).toLocaleString()} -
+          Desperté: {new Date(wakeAt).toLocaleString()}.
         </p>
       </div>
+
       <label>
         Interrupciones
+
         <select {...register('interruptions')}>
           <option value="0">Ninguna</option>
           <option value="1">Una vez</option>
           <option value="2">Dos veces</option>
-          <option value="3">Tres o mas</option>
+          <option value="3">Tres o más</option>
         </select>
       </label>
+
       <label>
-        Calidad del sueno
+        Calidad del sueño
+
         <select {...register('quality')}>
           {qualityOptions.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option
+              key={option.value}
+              value={option.value}
+            >
               {option.label}
             </option>
           ))}
         </select>
       </label>
+
       <label>
-        Energia al despertar
+        Energía al despertar
+
         <select {...register('wakeEnergy')}>
           {qualityOptions.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option
+              key={option.value}
+              value={option.value}
+            >
               {option.label}
             </option>
           ))}
         </select>
       </label>
+
       <label className="check-row">
-        <input type="checkbox" {...register('lateWork')} />
-        Trabaje de madrugada
+        <input
+          type="checkbox"
+          {...register('lateWork')}
+        />
+        Trabajé de madrugada
       </label>
+
       <label>
         Notas
+
         <textarea {...register('notes')} />
       </label>
-      <Button type="submit">Guardar sueno</Button>
+
+      <Button type="submit">
+        Guardar sueño
+      </Button>
     </form>
   )
 }

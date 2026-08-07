@@ -1,18 +1,46 @@
 import { useMemo, useState } from 'react'
-import { Archive, CalendarCheck, Edit3, Flame, Plus, RotateCcw, Star, Target, Trash2 } from 'lucide-react'
+import type { CSSProperties } from 'react'
+import {
+  Archive,
+  BarChart3,
+  CalendarCheck,
+  CheckCircle2,
+  Edit3,
+  Flame,
+  MoreHorizontal,
+  Plus,
+  RotateCcw,
+  Star,
+  Target,
+  Trash2,
+} from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Modal } from '../../components/Modal'
-import { StatCard } from '../../components/StatCard'
 import { useAppStore } from '../../stores/appStore'
-import { calculateHabitDayScore, statusFromValue } from '../../services/habitScoring'
+import {
+  calculateHabitDayScore,
+  statusFromValue,
+} from '../../services/habitScoring'
 import { percent } from '../../utils/format'
 import { todayIso } from '../../utils/date'
-import type { Habit, HabitCategory, FrequencyType } from '../../types/domain'
+import type {
+  FrequencyType,
+  Habit,
+  HabitCategory,
+} from '../../types/domain'
 
 const habitSchema = z.object({
   name: z.string().min(1),
@@ -32,6 +60,37 @@ const habitSchema = z.object({
 type HabitInput = z.input<typeof habitSchema>
 type HabitForm = z.output<typeof habitSchema>
 
+const habitCategories: HabitCategory[] = [
+  'Esenciales',
+  'Desarrollo',
+  'Trabajo',
+  'Mantenimiento',
+  'Vida personal',
+  'Recreacion',
+]
+
+const defaultHabitValues: HabitInput = {
+  name: '',
+  description: '',
+  category: 'Esenciales',
+  icon: 'Target',
+  unit: 'veces',
+  minimumValue: 1,
+  targetValue: 1,
+  excellentValue: 2,
+  frequency: 'daily',
+  weight: 1,
+  color: '#2563eb',
+  notes: '',
+}
+
+const entryLabel = (status?: string): string => {
+  if (status === 'minimum') return 'Base'
+  if (status === 'target') return 'Meta'
+  if (status === 'excellent') return 'Extra'
+  return status || 'Sin registrar'
+}
+
 export function HabitsPage() {
   const data = useAppStore((state) => state.data)
   const addHabit = useAppStore((state) => state.addHabit)
@@ -39,39 +98,88 @@ export function HabitsPage() {
   const archiveHabit = useAppStore((state) => state.archiveHabit)
   const restoreHabit = useAppStore((state) => state.restoreHabit)
   const deleteHabit = useAppStore((state) => state.deleteHabit)
-  const upsertEntry = useAppStore((state) => state.upsertHabitEntry)
+  const upsertEntry = useAppStore(
+    (state) => state.upsertHabitEntry,
+  )
+
   const [editing, setEditing] = useState<Habit | null>(null)
   const [deleting, setDeleting] = useState<Habit | null>(null)
   const [showForm, setShowForm] = useState(false)
+
   const today = todayIso()
-  const { register, handleSubmit, reset } = useForm<HabitInput, unknown, HabitForm>({
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+  } = useForm<HabitInput, unknown, HabitForm>({
     resolver: zodResolver(habitSchema),
-    defaultValues: {
-      name: '',
-      category: 'Esenciales',
-      icon: 'Target',
-      unit: 'veces',
-      minimumValue: 1,
-      targetValue: 1,
-      excellentValue: 2,
-      frequency: 'daily',
-      weight: 1,
-      color: '#2563eb',
-    },
+    defaultValues: defaultHabitValues,
   })
 
   const metrics = useMemo(() => {
     if (!data) return null
-    return calculateHabitDayScore(data.habits, data.habitEntries, today, data.settings.habitScoreWeights)
+
+    return calculateHabitDayScore(
+      data.habits,
+      data.habitEntries,
+      today,
+      data.settings.habitScoreWeights,
+    )
   }, [data, today])
 
   if (!data || !metrics) return null
-  const activeHabits = data.habits.filter((habit) => habit.status === 'active').sort((a, b) => a.order - b.order)
-  const archivedHabits = data.habits.filter((habit) => habit.status === 'archived').sort((a, b) => a.order - b.order)
-  const chartData = ['Esenciales', 'Desarrollo', 'Trabajo', 'Mantenimiento', 'Vida personal', 'Recreacion'].map((category) => ({
+
+  const activeHabits = data.habits
+    .filter((habit) => habit.status === 'active')
+    .toSorted((a, b) => a.order - b.order)
+
+  const archivedHabits = data.habits
+    .filter((habit) => habit.status === 'archived')
+    .toSorted((a, b) => a.order - b.order)
+
+  const todayEntries = new Map(
+    data.habitEntries
+      .filter((entry) => entry.date === today)
+      .map((entry) => [entry.habitId, entry]),
+  )
+
+  const pendingHabits = activeHabits.filter(
+    (habit) => !todayEntries.has(habit.id),
+  )
+
+  const registeredHabits = activeHabits.filter(
+    (habit) => todayEntries.has(habit.id),
+  )
+
+  const chartData = habitCategories.map((category) => ({
     category,
-    registros: data.habitEntries.filter((entry) => activeHabits.find((habit) => habit.id === entry.habitId && habit.category === category)).length,
+    registros: data.habitEntries.filter((entry) =>
+      activeHabits.some(
+        (habit) =>
+          habit.id === entry.habitId &&
+          habit.category === category,
+      ),
+    ).length,
   }))
+
+  const closeForm = () => {
+    setEditing(null)
+    setShowForm(false)
+    reset(defaultHabitValues)
+  }
+
+  // const openCreate = () => {
+  //   setEditing(null)
+  //   reset(defaultHabitValues)
+  //   setShowForm(true)
+  // }
+
+  const openEdit = (habit: Habit) => {
+    setEditing(habit)
+    reset(habit)
+    setShowForm(true)
+  }
 
   const submit = async (values: HabitForm) => {
     if (editing) {
@@ -81,8 +189,6 @@ export function HabitsPage() {
         category: values.category as HabitCategory,
         frequency: values.frequency as FrequencyType,
       })
-      setEditing(null)
-      setShowForm(false)
     } else {
       await addHabit({
         ...values,
@@ -96,205 +202,522 @@ export function HabitsPage() {
         order: data.habits.length + 1,
       })
     }
-    reset()
+
+    closeForm()
   }
 
-  const openEdit = (habit: Habit) => {
-    setEditing(habit)
-    setShowForm(true)
-    reset(habit)
+  const renderHabitCard = (habit: Habit) => {
+    const entry = todayEntries.get(habit.id)
+
+    const options = [
+      {
+        label: 'Base',
+        value: habit.minimumValue,
+        icon: (
+          <CalendarCheck
+            size={14}
+            aria-hidden="true"
+          />
+        ),
+      },
+      {
+        label: 'Meta',
+        value: habit.targetValue,
+        icon: <Target size={14} aria-hidden="true" />,
+      },
+      {
+        label: 'Extra',
+        value: habit.excellentValue,
+        icon: <Star size={14} aria-hidden="true" />,
+      },
+    ]
+
+    return (
+      <article
+        className="habits-daily-card"
+        key={habit.id}
+        style={
+          {
+            '--habit-color': habit.color,
+          } as CSSProperties
+        }
+      >
+        <header className="habits-daily-card__header">
+          <div className="habits-daily-card__identity">
+            <h3>{habit.name}</h3>
+
+            <span>
+              {habit.category} · {habit.unit}
+            </span>
+          </div>
+
+          <div className="habits-daily-card__tools">
+            <span
+              className={`status-pill status-${
+                entry?.status ?? 'unregistered'
+              }`}
+            >
+              {entryLabel(entry?.status)}
+            </span>
+
+            <details className="habits-action-menu">
+              <summary
+                aria-label={`Acciones de ${habit.name}`}
+                title="Más acciones"
+              >
+                <MoreHorizontal
+                  size={18}
+                  aria-hidden="true"
+                />
+              </summary>
+
+              <div className="habits-action-menu__popover">
+                <button
+                  type="button"
+                  onClick={() => openEdit(habit)}
+                >
+                  <Edit3 size={15} aria-hidden="true" />
+                  Editar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    void archiveHabit(habit.id)
+                  }}
+                >
+                  <Archive size={15} aria-hidden="true" />
+                  Archivar
+                </button>
+
+                <button
+                  type="button"
+                  className="is-danger"
+                  onClick={() => setDeleting(habit)}
+                >
+                  <Trash2 size={15} aria-hidden="true" />
+                  Eliminar
+                </button>
+              </div>
+            </details>
+          </div>
+        </header>
+
+        <div
+          className="habits-choice-grid"
+          role="group"
+          aria-label={`Registrar progreso de ${habit.name}`}
+        >
+          {options.map((option) => {
+            const active = entry?.value === option.value
+
+            return (
+              <button
+                key={`${habit.id}-${option.label}-${option.value}`}
+                type="button"
+                className={`habits-choice${
+                  active ? ' is-active' : ''
+                }`}
+                aria-pressed={active}
+                title={`${option.label}: ${option.value} ${habit.unit}`}
+                onClick={() =>
+                  upsertEntry({
+                    habitId: habit.id,
+                    date: today,
+                    value: option.value,
+                    status: statusFromValue(
+                      habit,
+                      option.value,
+                    ),
+                  })
+                }
+              >
+                <span>
+                  {option.icon}
+                  {option.label}
+                </span>
+
+                <strong>{option.value}</strong>
+              </button>
+            )
+          })}
+        </div>
+
+        {entry ? (
+          <footer className="habits-daily-card__footer">
+            Registrado: {entry.value} {habit.unit}
+          </footer>
+        ) : null}
+      </article>
+    )
   }
 
   return (
-    <section className="page stack">
-      <div className="stat-grid">
-        <StatCard label="Habitos activos" value={String(activeHabits.length)} icon={<CalendarCheck />} />
-        <StatCard label="Minimos cumplidos" value={percent(metrics.minimumPercent)} icon={<Flame />} tone="green" />
-        <StatCard label="Objetivos cumplidos" value={percent(metrics.targetPercent)} icon={<Flame />} tone="gold" />
+    <section className="page habits-mobile-page">
+      {/* <header className="habits-page-header">
+        <div>
+          <p>Seguimiento diario</p>
+          <h2>Hábitos</h2>
+        </div>
+
+        <Button
+          onClick={openCreate}
+          icon={<Plus size={17} aria-hidden="true" />}
+        >
+          Crear
+        </Button>
+      </header> */}
+
+      <div
+        className="habits-summary-grid"
+        aria-label="Resumen de hábitos"
+      >
+        <article className="habits-summary-card tone-blue">
+          <CalendarCheck size={17} aria-hidden="true" />
+          <span>Activos</span>
+          <strong>{activeHabits.length}</strong>
+        </article>
+
+        <article className="habits-summary-card tone-green">
+          <Flame size={17} aria-hidden="true" />
+          <span>Mínimos</span>
+          <strong>
+            {percent(metrics.minimumPercent)}
+          </strong>
+        </article>
+
+        <article className="habits-summary-card tone-gold">
+          <Target size={17} aria-hidden="true" />
+          <span>Metas</span>
+          <strong>
+            {percent(metrics.targetPercent)}
+          </strong>
+        </article>
       </div>
-      <div className="two-column">
-        {showForm ? (
-        <section className="panel">
-          <div className="panel-header">
-            <h2>{editing ? 'Editar habito' : 'Crear habito'}</h2>
-            <Button variant="ghost" onClick={() => { setEditing(null); setShowForm(false); reset() }}>
-                Cancelar
-            </Button>
+
+
+      <details className="habits-collapse" open>
+        <summary>
+          <div>
+            <strong>Consistencia por categoría</strong>
+            <span>Historial acumulado de registros</span>
           </div>
-          <form className="form-stack" onSubmit={handleSubmit(submit)}>
-            <div className="form-grid two">
+
+          <BarChart3 size={18} aria-hidden="true" />
+        </summary>
+
+        <div className="habits-collapse__body">
+          <div className="habits-chart-box">
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="category"
+                  tick={{ fontSize: 10 }}
+                  interval={0}
+                  angle={-20}
+                  textAnchor="end"
+                  height={58}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fontSize: 10 }}
+                />
+                <Tooltip />
+                <Bar
+                  dataKey="registros"
+                  fill="#2563eb"
+                  radius={[6, 6, 0, 0]}
+                  isAnimationActive={false}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </details>
+
+      <section className="panel habits-daily-panel">
+        <div className="habits-panel-heading">
+          <div>
+            <h2>Pendientes de hoy</h2>
+
+            <span>
+              {pendingHabits.length} por registrar ·{' '}
+              {registeredHabits.length} completados
+            </span>
+          </div>
+
+          <strong>
+            {registeredHabits.length}/{activeHabits.length}
+          </strong>
+        </div>
+
+        <div className="habits-daily-list">
+          {pendingHabits.map(renderHabitCard)}
+
+          {pendingHabits.length === 0 &&
+          activeHabits.length > 0 ? (
+            <div className="habits-all-done">
+              <CheckCircle2
+                size={22}
+                aria-hidden="true"
+              />
+
+              <div>
+                <strong>Todo registrado por hoy</strong>
+                <span>
+                  Puedes revisar o cambiar los valores abajo.
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          {activeHabits.length === 0 ? (
+            <div className="habits-empty">
+              <Target size={22} aria-hidden="true" />
+
+              <div>
+                <strong>No hay hábitos activos</strong>
+                <span>
+                  Crea el primero para comenzar el seguimiento.
+                </span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      {registeredHabits.length > 0 ? (
+        <details className="habits-collapse">
+          <summary>
+            <div>
+              <strong>Registrados hoy</strong>
+              <span>
+                Revisa o cambia el nivel alcanzado
+              </span>
+            </div>
+
+            <b>{registeredHabits.length}</b>
+          </summary>
+
+          <div className="habits-collapse__body">
+            {registeredHabits.map(renderHabitCard)}
+          </div>
+        </details>
+      ) : null}
+
+
+      {archivedHabits.length > 0 ? (
+        <details className="habits-collapse">
+          <summary>
+            <div>
+              <strong>Hábitos archivados</strong>
+              <span>
+                Puedes restaurarlos cuando vuelvan a aplicar
+              </span>
+            </div>
+
+            <b>{archivedHabits.length}</b>
+          </summary>
+
+          <div className="habits-collapse__body">
+            <div className="habits-archived-list">
+              {archivedHabits.map((habit) => (
+                <article
+                  className="habits-archived-row"
+                  key={habit.id}
+                >
+                  <div>
+                    <strong>{habit.name}</strong>
+                    <span>{habit.category}</span>
+                  </div>
+
+                  <Button
+                    variant="secondary"
+                    aria-label={`Restaurar ${habit.name}`}
+                    onClick={() => {
+                      void restoreHabit(habit.id)
+                    }}
+                    icon={
+                      <RotateCcw
+                        size={15}
+                        aria-hidden="true"
+                      />
+                    }
+                  >
+                    Restaurar
+                  </Button>
+                </article>
+              ))}
+            </div>
+          </div>
+        </details>
+      ) : null}
+
+      <Modal
+        title={editing ? 'Editar hábito' : 'Crear hábito'}
+        open={showForm}
+        onClose={closeForm}
+      >
+        <form
+          className="habits-form"
+          onSubmit={handleSubmit(submit)}
+        >
+          <section className="habits-form-section">
+            <h3>Información principal</h3>
+
+            <label>
+              Nombre
+              <input
+                {...register('name')}
+                placeholder="Ej. Entrenamiento"
+              />
+            </label>
+
+            <div className="habits-form-grid two">
               <label>
-                Nombre
-                <input {...register('name')} />
-              </label>
-              <label>
-                Categoria
+                Categoría
+
                 <select {...register('category')}>
-                  {['Esenciales', 'Desarrollo', 'Trabajo', 'Mantenimiento', 'Vida personal', 'Recreacion'].map((item) => (
+                  {habitCategories.map((item) => (
                     <option key={item}>{item}</option>
                   ))}
                 </select>
               </label>
+
               <label>
                 Unidad
-                <input {...register('unit')} />
-              </label>
-              <label>
-                Icono
-                <input {...register('icon')} />
-              </label>
-              <label>
-                Minimo
-                <input type="number" step="0.1" {...register('minimumValue')} />
-              </label>
-              <label>
-                Objetivo
-                <input type="number" step="0.1" {...register('targetValue')} />
-              </label>
-              <label>
-                Excelente
-                <input type="number" step="0.1" {...register('excellentValue')} />
-              </label>
-              <label>
-                Frecuencia
-                <select {...register('frequency')}>
-                  <option value="daily">Diaria</option>
-                  <option value="weekly">Semanal</option>
-                  <option value="monthly">Mensual</option>
-                  <option value="custom">Personalizada</option>
-                </select>
-              </label>
-              <label>
-                Peso
-                <input type="number" step="0.1" {...register('weight')} />
-              </label>
-              <label>
-                Color
-                <input type="color" {...register('color')} />
+                <input
+                  {...register('unit')}
+                  placeholder="minutos, páginas..."
+                />
               </label>
             </div>
-            <label>
-              Descripcion
-              <textarea {...register('description')} />
-            </label>
-            <Button type="submit" icon={<Plus size={18} />}>
-              {editing ? 'Guardar cambios' : 'Crear habito'}
-            </Button>
-          </form>
-        </section>
-        ) : (
-          <section className="panel">
-            <div className="panel-header">
-              <h2>Habitos</h2>
-              <Button onClick={() => setShowForm(true)} icon={<Plus size={18} />}>
-                Crear habito
-              </Button>
-            </div>
-            <p className="muted">Crea o edita habitos solo cuando necesites cambiar tu sistema. El uso diario esta abajo.</p>
           </section>
-        )}
 
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Consistencia por categoria</h2>
-          </div>
-          <div className="chart-box">
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="category" />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="registros" fill="#2563eb" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-      </div>
+          <section className="habits-form-section">
+            <h3>Niveles diarios</h3>
 
-      <section className="panel">
-        <div className="panel-header">
-          <h2>Vista diaria</h2>
-          <span>Las casillas sin registro son neutrales.</span>
-        </div>
-        <div className="habit-grid">
-          {activeHabits.map((habit) => {
-            const entry = data.habitEntries.find((item) => item.habitId === habit.id && item.date === today)
-            return (
-              <article className="habit-card" key={habit.id} style={{ borderColor: habit.color }}>
-                <div>
-                  <h3>{habit.name}</h3>
-                  <p>
-                    {habit.minimumValue}/{habit.targetValue}/{habit.excellentValue} {habit.unit}
-                  </p>
-                </div>
-                <div className="segmented">
-                  {[
-                    { label: 'Base', value: habit.minimumValue, icon: <CalendarCheck size={18} /> },
-                    { label: 'Meta', value: habit.targetValue, icon: <Target size={18} /> },
-                    { label: 'Extra', value: habit.excellentValue, icon: <Star size={18} /> },
-                  ].map((option) => (
-                    <button
-                      key={`${habit.id}-${option.label}-${option.value}`}
-                      type="button"
-                      title={`${option.label}: ${option.value} ${habit.unit}`}
-                      className={entry?.value === option.value ? 'active' : undefined}
-                      onClick={() => upsertEntry({ habitId: habit.id, date: today, value: option.value, status: statusFromValue(habit, option.value) })}
-                    >
-                      {option.icon}
-                      <span>{option.label}</span>
-                      <strong>{option.value}</strong>
-                    </button>
-                  ))}
-                </div>
-                <span className={`status-pill status-${entry?.status ?? 'unregistered'}`}>{entry?.status ?? 'sin registrar'}</span>
-                <div className="icon-actions">
-                  <button type="button" aria-label={`Editar ${habit.name}`} title="Editar" onClick={() => openEdit(habit)}>
-                    <Edit3 size={18} />
-                  </button>
-                  <button type="button" aria-label={`Archivar ${habit.name}`} title="Archivar" onClick={() => archiveHabit(habit.id)}>
-                    <Archive size={18} />
-                  </button>
-                  <button type="button" aria-label={`Eliminar ${habit.name}`} title="Eliminar" onClick={() => setDeleting(habit)}>
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              </article>
-            )
-          })}
-        </div>
-      </section>
+            <div className="habits-form-grid three">
+              <label>
+                Base
+                <input
+                  type="number"
+                  step="0.1"
+                  {...register('minimumValue')}
+                />
+              </label>
 
-      {archivedHabits.length > 0 ? (
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Habitos archivados</h2>
-            <span>Se pueden restaurar cuando vuelvan a aplicar.</span>
-          </div>
-          <div className="mobile-card-list">
-            {archivedHabits.map((habit) => (
-              <article className="mobile-card" key={habit.id}>
-                <strong>{habit.name}</strong>
-                <span>{habit.category}</span>
-                <Button variant="secondary" onClick={() => restoreHabit(habit.id)} icon={<RotateCcw size={16} />}>
-                  Desarchivar
-                </Button>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
+              <label>
+                Meta
+                <input
+                  type="number"
+                  step="0.1"
+                  {...register('targetValue')}
+                />
+              </label>
 
-      <Modal title="Historial detallado" open={false} onClose={() => undefined}>
-        <div />
+              <label>
+                Extra
+                <input
+                  type="number"
+                  step="0.1"
+                  {...register('excellentValue')}
+                />
+              </label>
+            </div>
+          </section>
+
+          <details className="habits-form-advanced">
+            <summary>Configuración adicional</summary>
+
+            <div className="habits-form-advanced__body">
+              <div className="habits-form-grid two">
+                <label>
+                  Frecuencia
+
+                  <select {...register('frequency')}>
+                    <option value="daily">Diaria</option>
+                    <option value="weekly">Semanal</option>
+                    <option value="monthly">Mensual</option>
+                    <option value="custom">
+                      Personalizada
+                    </option>
+                  </select>
+                </label>
+
+                <label>
+                  Peso
+                  <input
+                    type="number"
+                    step="0.1"
+                    {...register('weight')}
+                  />
+                </label>
+
+                <label>
+                  Icono
+                  <input {...register('icon')} />
+                </label>
+
+                <label>
+                  Color
+                  <input
+                    type="color"
+                    {...register('color')}
+                  />
+                </label>
+              </div>
+
+              <label>
+                Descripción
+                <textarea
+                  rows={3}
+                  {...register('description')}
+                />
+              </label>
+
+              <label>
+                Notas
+                <textarea
+                  rows={3}
+                  {...register('notes')}
+                />
+              </label>
+            </div>
+          </details>
+
+          <div className="habits-form-actions">
+            <Button
+              type="submit"
+              icon={<Plus size={17} aria-hidden="true" />}
+            >
+              {editing
+                ? 'Guardar cambios'
+                : 'Crear hábito'}
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={closeForm}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </form>
       </Modal>
+
       <ConfirmDialog
         open={Boolean(deleting)}
-        title="Eliminar habito"
-        message="Se eliminaran tambien sus registros diarios. Esta accion no se puede deshacer."
+        title="Eliminar hábito"
+        message="Se eliminarán también sus registros diarios. Esta acción no se puede deshacer."
         onCancel={() => setDeleting(null)}
         onConfirm={() => {
-          if (deleting) deleteHabit(deleting.id)
+          if (deleting) {
+            void deleteHabit(deleting.id)
+          }
+
           setDeleting(null)
         }}
       />

@@ -21,6 +21,8 @@ export interface AppSettings extends BaseEntity {
   firstDayOfWeek: Weekday
   sleepGoalHours: number
   activeSleepStartedAt?: string
+  activeTrainingStartedAt?: string
+  activeTrainingEnergyBefore?: number
   theme: ThemePreference
   onboardingCompleted: boolean
   persistentStorage: boolean

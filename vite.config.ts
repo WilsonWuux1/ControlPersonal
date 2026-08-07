@@ -10,6 +10,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: {
+        enabled: true,
+      },
       includeAssets: ['favicon.svg', 'app-icon.svg', 'logo.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,json,woff2}'],
@@ -19,11 +22,12 @@ export default defineConfig({
         name: 'Control Personal',
         short_name: 'Control',
         description: 'Gestion personal local de habitos, productividad, bienestar y finanzas.',
+        lang: 'es',
         theme_color: '#2563eb',
         background_color: '#f6f8fb',
         display: 'standalone',
-        start_url: '.',
-        scope: '.',
+        start_url: base,
+        scope: base,
         icons: [
           {
             src: 'logo.png',

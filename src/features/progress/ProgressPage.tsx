@@ -1,9 +1,20 @@
-import { useState } from 'react'
+import { useState, type ReactElement } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart3, CalendarDays, Coins, Dumbbell, Heart, Moon, Printer, Sparkles, Target, UserRound } from 'lucide-react'
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  BarChart3,
+  CalendarDays,
+  ChevronDown,
+  Coins,
+  Dumbbell,
+  Heart,
+  Moon,
+  Printer,
+  Sparkles,
+  Target,
+  UserRound,
+} from 'lucide-react'
+import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Button } from '../../components/Button'
-import { StatCard } from '../../components/StatCard'
 import { useAppStore } from '../../stores/appStore'
 import { calculateFinancialSummary } from '../../services/financeCalculations'
 import { calculateHabitDayScore } from '../../services/habitScoring'
@@ -25,11 +36,8 @@ const localDateKey = (date: Date): string => {
 
 const monthStart = (date: string): string => `${date.slice(0, 7)}-01`
 const yearStart = (date: string): string => `${date.slice(0, 4)}-01-01`
-const monthEnd = (date: string): string => {
-  const year = Number(date.slice(0, 4))
-  const month = Number(date.slice(5, 7))
-  return localDateKey(new Date(year, month, 0))
-}
+
+
 const addDays = (date: Date, days: number): Date => {
   const next = new Date(date)
   next.setDate(next.getDate() + days)
@@ -47,7 +55,13 @@ const datesBetween = (start: string, end: string): string[] => {
 }
 const average = (values: number[]): number => (values.length ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1)) : 0)
 const sumNumbers = (values: number[]): number => values.reduce((sum, value) => sum + value, 0)
-const dateFromIso = (value: string): string => value.slice(0, 10)
+const dateFromIso = (value: string): string => {
+  const date = new Date(value)
+
+  return Number.isNaN(date.getTime())
+    ? value.slice(0, 10)
+    : localDateKey(date)
+}
 const shortDate = (value: string): string => value.slice(5)
 const formatSignedCurrency = (value: number, currency: string): string => `${value >= 0 ? '+' : '-'}${formatCurrency(Math.abs(value), currency)}`
 
@@ -69,6 +83,9 @@ interface PrintableReport {
   metrics: ReportMetric[]
   sections: ReportSection[]
 }
+
+type ProgressPeriod = 'today' | 'week' | 'month' | 'year' | 'custom'
+
 
 const escapeHtml = (value: string): string =>
   value
@@ -249,9 +266,48 @@ export function ProgressPage() {
   const data = useAppStore((state) => state.data)
   const [startDate, setStartDate] = useState(() => monthStart(todayIso()))
   const [endDate, setEndDate] = useState(() => todayIso())
+  const [periodMode, setPeriodMode] = useState<ProgressPeriod>('month')
+  const [periodOpen, setPeriodOpen] = useState(false)
   if (!data) return null
 
   const today = todayIso()
+  const selectPeriod = (
+  mode: Exclude<ProgressPeriod, 'custom'>,
+) => {
+  setPeriodMode(mode)
+  setPeriodOpen(false)
+
+  if (mode === 'today') {
+    setStartDate(today)
+    setEndDate(today)
+    return
+  }
+
+  if (mode === 'week') {
+    setStartDate(
+      localDateKey(
+        addDays(new Date(`${today}T00:00:00`), -6),
+      ),
+    )
+    setEndDate(today)
+    return
+  }
+
+  if (mode === 'month') {
+    setStartDate(monthStart(today))
+    setEndDate(today)
+    return
+  }
+
+  setStartDate(yearStart(today))
+  setEndDate(today)
+}
+
+const selectedPeriodStyle = {
+  background: '#2563eb',
+  borderColor: '#2563eb',
+  color: '#ffffff',
+}
   const safeStart = startDate <= endDate ? startDate : endDate
   const safeEnd = startDate <= endDate ? endDate : startDate
   const periodDates = datesBetween(safeStart, safeEnd)
@@ -358,6 +414,102 @@ export function ProgressPage() {
   peso: Number(log.weightLb),
 }))
 
+  const trainingMinutes = sumNumbers(
+    filteredTrainingLogs.map(
+      (log) => Number(log.durationMinutes) || 0,
+    ),
+  )
+
+  const averageTrainingIntensity = average(
+    filteredTrainingLogs
+      .map((log) => Number(log.intensity))
+      .filter((value) => value > 0),
+  )
+
+  const trainingTrendData = periodDates.map((date) => {
+    const logs = filteredTrainingLogs.filter(
+      (log) => dateFromIso(log.dateTime) === date,
+    )
+
+    return {
+      fecha: shortDate(date),
+      minutos: sumNumbers(
+        logs.map(
+          (log) => Number(log.durationMinutes) || 0,
+        ),
+      ),
+      intensidad: logs.length
+        ? average(
+            logs
+              .map((log) => Number(log.intensity))
+              .filter((value) => value > 0),
+          )
+        : null,
+      energiaAntes: logs.length
+        ? average(
+            logs
+              .map((log) => Number(log.energyBefore))
+              .filter((value) => value > 0),
+          )
+        : null,
+      energiaDespues: logs.length
+        ? average(
+            logs
+              .map((log) => Number(log.energyAfter))
+              .filter((value) => value > 0),
+          )
+        : null,
+    }
+  })
+
+  const workTrendData = periodDates.map((date) => {
+    const sessions = filteredWorkSessions.filter(
+      (session) =>
+        dateFromIso(session.startedAt) === date,
+    )
+
+    return {
+      fecha: shortDate(date),
+      minutos: sumNumbers(
+        sessions.map(
+          (session) =>
+            Number(session.effectiveMinutes) || 0,
+        ),
+      ),
+      enfoque: sessions.length
+        ? average(
+            sessions
+              .map((session) =>
+                Number(session.focusLevel),
+              )
+              .filter((value) => value > 0),
+          )
+        : null,
+    }
+  })
+
+  const socialTrendData = periodDates.map((date) => {
+    const logs = filteredSocialLogs.filter(
+      (log) => dateFromIso(log.dateTime) === date,
+    )
+
+    return {
+      fecha: shortDate(date),
+      minutos: sumNumbers(
+        logs.map(
+          (log) => Number(log.durationMinutes) || 0,
+        ),
+      ),
+      calidad: logs.length
+        ? average(
+            logs
+              .map((log) => Number(log.quality))
+              .filter((value) => value > 0),
+          )
+        : null,
+    }
+  })
+
   const profileLine = `${profile.age ? `${profile.age} anos` : 'edad pendiente'}, ${profile.heightCm ? `${profile.heightCm} cm` : 'altura pendiente'}, ${profile.weightLb ? `${profile.weightLb} lb` : 'peso pendiente'}`
   const bmiReferenceLine =
     profile.bmiReferenceMin && profile.bmiReferenceMax ? `${profile.bmiReferenceMin}-${profile.bmiReferenceMax}` : 'Pendiente'
@@ -426,7 +578,16 @@ export function ProgressPage() {
     },
   ]
 
-  const weightChange = filteredWeightLogs.length >= 2 ? Number((filteredWeightLogs.at(-1)?.weightLb ?? 0) - filteredWeightLogs[0].weightLb).toFixed(1) : undefined
+ const weightChange: number | undefined =
+  filteredWeightLogs.length >= 2
+    ? Number(
+        (
+          Number(filteredWeightLogs.at(-1)?.weightLb ?? 0) -
+          Number(filteredWeightLogs[0].weightLb ?? 0)
+        ).toFixed(1),
+      )
+    : undefined
+
   const report = {
     overview:
       habitPercent >= 70
@@ -474,453 +635,1512 @@ export function ProgressPage() {
   }
 
   return (
-    <section className="page stack">
-      <section className="panel no-print">
-        <div className="panel-header">
-          <h2>Rango de progreso</h2>
-          <CalendarDays size={20} />
-        </div>
-        <div className="form-grid three">
-          <label>
-            Fecha inicial
-            <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-          </label>
-          <label>
-            Fecha final
-            <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
-          </label>
-          <div className="actions align-end">
-            <Button variant="secondary" onClick={() => { setStartDate(localDateKey(addDays(new Date(`${today}T00:00:00`), -6))); setEndDate(today) }}>
-              Semana
-            </Button>
-            <Button variant="secondary" onClick={() => { setStartDate(monthStart(today)); setEndDate(monthEnd(today)) }}>
-              Mes
-            </Button>
-            <Button variant="secondary" onClick={() => { setStartDate(yearStart(today)); setEndDate(today) }}>
-              Ano
-            </Button>
-            <Button onClick={() => printReport(printableReport)}>
-              <Printer size={18} />
-              Reporte PDF
-            </Button>
+    <section className="page progress-analysis-page">
+      <section className="progress-analysis-toolbar no-print">
+        <button
+          type="button"
+          className="progress-period-trigger"
+          aria-expanded={periodOpen}
+          aria-controls="progress-period-controls"
+          onClick={() =>
+            setPeriodOpen((current) => !current)
+          }
+        >
+          <div>
+            <span>Periodo de análisis</span>
+
+            <strong>
+              {periodMode === 'today' && 'Hoy'}
+              {periodMode === 'week' && 'Últimos 7 días'}
+              {periodMode === 'month' && 'Mes actual'}
+              {periodMode === 'year' && 'Año actual'}
+              {periodMode === 'custom' && 'Personalizado'}
+            </strong>
+
+            <small>
+              {safeStart === safeEnd
+                ? safeStart
+                : `${safeStart} al ${safeEnd}`}
+            </small>
           </div>
+
+          <div className="progress-period-trigger__icons">
+            <CalendarDays
+              size={18}
+              aria-hidden="true"
+            />
+
+            <ChevronDown
+              size={18}
+              className={periodOpen ? 'is-open' : undefined}
+              aria-hidden="true"
+            />
+          </div>
+        </button>
+
+        <Button
+          variant="secondary"
+          className="progress-print-button"
+          aria-label="Generar reporte PDF"
+          title="Generar reporte PDF"
+          onClick={() =>
+            printReport(printableReport)
+          }
+          icon={<Printer size={17} aria-hidden="true" />}
+        >
+          PDF
+        </Button>
+
+        {periodOpen ? (
+          <div
+            id="progress-period-controls"
+            className="progress-period-controls"
+          >
+            <div className="progress-period-options">
+              <Button
+                variant="secondary"
+                style={
+                  periodMode === 'today'
+                    ? selectedPeriodStyle
+                    : undefined
+                }
+                onClick={() => selectPeriod('today')}
+              >
+                Hoy
+              </Button>
+
+              <Button
+                variant="secondary"
+                style={
+                  periodMode === 'week'
+                    ? selectedPeriodStyle
+                    : undefined
+                }
+                onClick={() => selectPeriod('week')}
+              >
+                Semana
+              </Button>
+
+              <Button
+                variant="secondary"
+                style={
+                  periodMode === 'month'
+                    ? selectedPeriodStyle
+                    : undefined
+                }
+                onClick={() => selectPeriod('month')}
+              >
+                Mes
+              </Button>
+
+              <Button
+                variant="secondary"
+                style={
+                  periodMode === 'year'
+                    ? selectedPeriodStyle
+                    : undefined
+                }
+                onClick={() => selectPeriod('year')}
+              >
+                Año
+              </Button>
+
+              <Button
+                variant="secondary"
+                className="progress-period-custom-button"
+                style={
+                  periodMode === 'custom'
+                    ? selectedPeriodStyle
+                    : undefined
+                }
+                onClick={() =>
+                  setPeriodMode('custom')
+                }
+              >
+                Personalizado
+              </Button>
+            </div>
+
+            {periodMode === 'custom' ? (
+              <div className="progress-custom-dates">
+                <label>
+                  Fecha inicial
+
+                  <input
+                    type="date"
+                    value={startDate}
+                    max={endDate}
+                    onChange={(event) =>
+                      setStartDate(
+                        event.target.value,
+                      )
+                    }
+                  />
+                </label>
+
+                <label>
+                  Fecha final
+
+                  <input
+                    type="date"
+                    value={endDate}
+                    min={startDate}
+                    max={today}
+                    onChange={(event) =>
+                      setEndDate(
+                        event.target.value,
+                      )
+                    }
+                  />
+                </label>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section
+        className="progress-analysis-kpis"
+        aria-label="Resumen del periodo"
+      >
+        <article className="progress-analysis-kpi tone-blue">
+          <span className="progress-analysis-kpi__icon">
+            <Target size={17} aria-hidden="true" />
+          </span>
+
+          <span>Hábitos</span>
+          <strong>{habitPercent}%</strong>
+          <small>
+            {
+              new Set(
+                filteredHabitEntries.map(
+                  (entry) => entry.date,
+                ),
+              ).size
+            }{' '}
+            días
+          </small>
+        </article>
+
+        <article className="progress-analysis-kpi tone-violet">
+          <span className="progress-analysis-kpi__icon">
+            <BarChart3 size={17} aria-hidden="true" />
+          </span>
+
+          <span>Trabajo</span>
+          <strong>
+            {formatMinutes(workMinutes)}
+          </strong>
+          <small>
+            {finishedWorkSessions} sesiones
+          </small>
+        </article>
+
+        <article className="progress-analysis-kpi tone-indigo">
+          <span className="progress-analysis-kpi__icon">
+            <Moon size={17} aria-hidden="true" />
+          </span>
+
+          <span>Sueño</span>
+          <strong>{sleep} h</strong>
+          <small>
+            Meta {data.settings.sleepGoalHours} h
+          </small>
+        </article>
+
+        <article className="progress-analysis-kpi tone-green">
+          <span className="progress-analysis-kpi__icon">
+            <Dumbbell
+              size={17}
+              aria-hidden="true"
+            />
+          </span>
+
+          <span>Entrenos</span>
+          <strong>{workouts}</strong>
+          <small>En el periodo</small>
+        </article>
+
+        <article className="progress-analysis-kpi tone-gold">
+          <span className="progress-analysis-kpi__icon">
+            <Heart size={17} aria-hidden="true" />
+          </span>
+
+          <span>Vida social</span>
+          <strong>
+            {formatMinutes(socialMinutes)}
+          </strong>
+          <small>Tiempo registrado</small>
+        </article>
+
+        <article className="progress-analysis-kpi tone-slate">
+          <span className="progress-analysis-kpi__icon">
+            <Coins size={17} aria-hidden="true" />
+          </span>
+
+          <span>Dinero libre</span>
+          <strong>
+            {formatCurrency(
+              finance.freeMoney,
+              data.settings.currency,
+            )}
+          </strong>
+          <small>
+            Flujo{' '}
+            {formatSignedCurrency(
+              periodFinance.netFlow,
+              data.settings.currency,
+            )}
+          </small>
+        </article>
+      </section>
+
+      <section className="panel progress-area-overview">
+        <div className="progress-analysis-section-heading">
+          <div>
+            <span>Lectura rápida</span>
+            <h2>Estado por área</h2>
+          </div>
+
+          <CalendarDays
+            size={19}
+            aria-hidden="true"
+          />
+        </div>
+
+        <div className="progress-area-grid">
+          {areaCards.map((area) => (
+            <article
+              className={`progress-area-card area-${area.tone}`}
+              key={area.title}
+            >
+              <header>
+                <span>{area.icon}</span>
+                <strong>{area.title}</strong>
+                <b>{area.score}%</b>
+              </header>
+
+              <div className="progress-area-card__value">
+                {area.value}
+              </div>
+
+              <div
+                className="progress-area-card__bar"
+                role="progressbar"
+                aria-label={`${area.title} ${area.score}%`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={area.score}
+              >
+                <span
+                  style={{
+                    width: `${area.score}%`,
+                  }}
+                />
+              </div>
+
+              <footer>
+                <span>{area.detail}</span>
+                <strong>{area.action}</strong>
+              </footer>
+            </article>
+          ))}
         </div>
       </section>
 
-      <div className="stat-grid">
-        <StatCard label="Habitos periodo" value={`${habitPercent}%`} icon={<Target />} />
-        <StatCard label="Trabajo periodo" value={formatMinutes(workMinutes)} icon={<BarChart3 />} />
-        <StatCard label="Sueno promedio" value={`${sleep} h`} icon={<Moon />} />
-        <StatCard label="Entrenamientos" value={String(workouts)} icon={<Dumbbell />} tone="green" />
-        <StatCard label="Vida social" value={formatMinutes(socialMinutes)} icon={<Heart />} tone="gold" />
-        <StatCard label="Dinero libre" value={formatCurrency(finance.freeMoney, data.settings.currency)} icon={<Coins />} tone="slate" />
-      </div>
-      <section className="panel progress-spotlight">
-        <div className="panel-header">
-          <h2>Lectura personal</h2>
-          <Sparkles size={20} />
+      <section className="progress-chart-section">
+        <div className="progress-analysis-section-heading progress-chart-section__heading">
+          <div>
+            <span>Comportamiento diario</span>
+            <h2>Hábitos y consistencia</h2>
+          </div>
         </div>
-        <div className="progress-spotlight-grid">
-          <div className="progress-profile-card">
-            <div className="progress-profile-title">
-              <UserRound size={20} />
-              <span>Perfil base</span>
-            </div>
-            <strong>{profileLine}</strong>
+
+        <div className="progress-chart-grid">
+          <ChartPanel
+            title="Consistencia del periodo"
+            subtitle="Consistencia general, mínimos y objetivos"
+            className="progress-chart-wide"
+            height={245}
+          >
+            <LineChart
+              data={consistencyData}
+              margin={{
+                top: 8,
+                right: 10,
+                left: -16,
+                bottom: 0,
+              }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+              />
+
+              <XAxis
+                dataKey="fecha"
+                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                domain={[0, 100]}
+                ticks={[0, 25, 50, 75, 100]}
+                tickFormatter={(value) =>
+                  `${value}%`
+                }
+                tick={{ fontSize: 10 }}
+              />
+
+              <Tooltip
+                formatter={(value) =>
+                  `${Number(value)}%`
+                }
+              />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: '11px',
+                  paddingTop: '6px',
+                }}
+              />
+
+              <Line
+                type="monotone"
+                dataKey="consistencia"
+                name="Consistencia"
+                stroke="#2563eb"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+
+              <Line
+                type="monotone"
+                dataKey="minimos"
+                name="Mínimos"
+                stroke="#16a34a"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+
+              <Line
+                type="monotone"
+                dataKey="objetivos"
+                name="Objetivos"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ChartPanel>
+
+          <ChartPanel
+            title="Hábitos clave"
+            subtitle={
+              trackedHabits.length > 0
+                ? `${trackedHabits.length} hábitos comparados contra su meta`
+                : 'Sin hábitos clave disponibles'
+            }
+            className="progress-chart-wide"
+            height={255}
+          >
+            <LineChart
+              data={habitData}
+              margin={{
+                top: 8,
+                right: 10,
+                left: -16,
+                bottom: 0,
+              }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+              />
+
+              <XAxis
+                dataKey="fecha"
+                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                domain={[0, 100]}
+                ticks={[0, 25, 50, 75, 100]}
+                tickFormatter={(value) =>
+                  `${value}%`
+                }
+                tick={{ fontSize: 10 }}
+              />
+
+              <Tooltip
+                formatter={(value) =>
+                  `${Number(value)}%`
+                }
+              />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  paddingTop: '6px',
+                }}
+              />
+
+              {trackedHabits.map(
+                (trackedHabit, index) => (
+                  <Line
+                    key={trackedHabit.id}
+                    type="monotone"
+                    dataKey={trackedHabit.id}
+                    name={trackedHabit.name}
+                    stroke={
+                      habitLineColors[
+                        index %
+                          habitLineColors.length
+                      ]
+                    }
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                ),
+              )}
+            </LineChart>
+          </ChartPanel>
+        </div>
+      </section>
+
+      <section className="progress-chart-section">
+        <div className="progress-analysis-section-heading progress-chart-section__heading">
+          <div>
+            <span>Actividad y rendimiento</span>
+            <h2>Trabajo, entrenamiento y vida personal</h2>
+          </div>
+        </div>
+
+        <div className="progress-chart-grid">
+          <ChartPanel
+            title="Entrenamientos"
+            subtitle={
+              filteredTrainingLogs.length > 0
+                ? `${formatMinutes(
+                    trainingMinutes,
+                  )} · ${filteredTrainingLogs.length} sesiones · intensidad media ${
+                    averageTrainingIntensity || '—'
+                  }/5`
+                : 'Sin entrenamientos registrados en el periodo'
+            }
+            className="progress-chart-wide"
+            height={255}
+          >
+            <ComposedChart
+              data={trainingTrendData}
+              margin={{
+                top: 8,
+                right: 4,
+                left: -14,
+                bottom: 0,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+
+              <XAxis
+                dataKey="fecha"
+                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                yAxisId="minutes"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                yAxisId="score"
+                orientation="right"
+                domain={[1, 5]}
+                ticks={[1, 2, 3, 4, 5]}
+                allowDecimals={false}
+                tick={{ fontSize: 10 }}
+                width={24}
+              />
+
+              <Tooltip
+                formatter={(value, name) => [
+                  String(name) === 'Minutos'
+                    ? formatMinutes(Number(value))
+                    : `${Number(value).toFixed(1)}/5`,
+                  String(name),
+                ]}
+              />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  paddingTop: '6px',
+                }}
+              />
+
+              <Bar
+                yAxisId="minutes"
+                dataKey="minutos"
+                name="Minutos"
+                fill="#2563eb"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+
+              <Line
+                yAxisId="score"
+                type="monotone"
+                dataKey="intensidad"
+                name="Intensidad"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                connectNulls
+                dot={{ r: 3 }}
+                isAnimationActive={false}
+              />
+
+              <Line
+                yAxisId="score"
+                type="monotone"
+                dataKey="energiaAntes"
+                name="Energía antes"
+                stroke="#7c3aed"
+                strokeWidth={2}
+                connectNulls
+                dot={false}
+                isAnimationActive={false}
+              />
+
+              <Line
+                yAxisId="score"
+                type="monotone"
+                dataKey="energiaDespues"
+                name="Energía después"
+                stroke="#16a34a"
+                strokeWidth={2}
+                connectNulls
+                dot={false}
+                isAnimationActive={false}
+              />
+            </ComposedChart>
+          </ChartPanel>
+
+          <ChartPanel
+            title="Trabajo efectivo"
+            subtitle={`${formatMinutes(
+              workMinutes,
+            )} · enfoque medio ${
+              averageFocus || '—'
+            }/5`}
+            height={235}
+          >
+            <ComposedChart
+              data={workTrendData}
+              margin={{
+                top: 8,
+                right: 4,
+                left: -14,
+                bottom: 0,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+
+              <XAxis
+                dataKey="fecha"
+                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                yAxisId="minutes"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                yAxisId="score"
+                orientation="right"
+                domain={[1, 5]}
+                ticks={[1, 2, 3, 4, 5]}
+                allowDecimals={false}
+                tick={{ fontSize: 10 }}
+                width={24}
+              />
+
+              <Tooltip
+                formatter={(value, name) => [
+                  String(name) === 'Minutos efectivos'
+                    ? formatMinutes(Number(value))
+                    : `${Number(value).toFixed(1)}/5`,
+                  String(name),
+                ]}
+              />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  paddingTop: '6px',
+                }}
+              />
+
+              <Bar
+                yAxisId="minutes"
+                dataKey="minutos"
+                name="Minutos efectivos"
+                fill="#0f766e"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+
+              <Line
+                yAxisId="score"
+                type="monotone"
+                dataKey="enfoque"
+                name="Enfoque"
+                stroke="#7c3aed"
+                strokeWidth={2}
+                connectNulls
+                dot={{ r: 3 }}
+                isAnimationActive={false}
+              />
+            </ComposedChart>
+          </ChartPanel>
+
+          <ChartPanel
+            title="Vida personal y social"
+            subtitle={`${formatMinutes(
+              socialMinutes,
+            )} registrados en el periodo`}
+            height={235}
+          >
+            <ComposedChart
+              data={socialTrendData}
+              margin={{
+                top: 8,
+                right: 4,
+                left: -14,
+                bottom: 0,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+
+              <XAxis
+                dataKey="fecha"
+                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                yAxisId="minutes"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                yAxisId="score"
+                orientation="right"
+                domain={[1, 5]}
+                ticks={[1, 2, 3, 4, 5]}
+                allowDecimals={false}
+                tick={{ fontSize: 10 }}
+                width={24}
+              />
+
+              <Tooltip
+                formatter={(value, name) => [
+                  String(name) === 'Minutos'
+                    ? formatMinutes(Number(value))
+                    : `${Number(value).toFixed(1)}/5`,
+                  String(name),
+                ]}
+              />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  paddingTop: '6px',
+                }}
+              />
+
+              <Bar
+                yAxisId="minutes"
+                dataKey="minutos"
+                name="Minutos"
+                fill="#db2777"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+
+              <Line
+                yAxisId="score"
+                type="monotone"
+                dataKey="calidad"
+                name="Calidad"
+                stroke="#2563eb"
+                strokeWidth={2}
+                connectNulls
+                dot={{ r: 3 }}
+                isAnimationActive={false}
+              />
+            </ComposedChart>
+          </ChartPanel>
+        </div>
+      </section>
+
+      <section className="progress-chart-section">
+        <div className="progress-analysis-section-heading progress-chart-section__heading">
+          <div>
+            <span>Bienestar y cuerpo</span>
+            <h2>Estado físico y emocional</h2>
+          </div>
+        </div>
+
+        <div className="progress-chart-grid">
+          <ChartPanel
+            title="Energía y ánimo"
+            subtitle={`Promedio: energía ${
+              averageEnergy || '—'
+            } · ánimo ${averageMood || '—'}`}
+            height={225}
+          >
+            <LineChart
+              data={moodEnergyData}
+              margin={{
+                top: 8,
+                right: 10,
+                left: -20,
+                bottom: 0,
+              }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+              />
+
+              <XAxis
+                dataKey="fecha"
+                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                domain={[1, 5]}
+                ticks={[1, 2, 3, 4, 5]}
+                tick={{ fontSize: 10 }}
+              />
+
+              <Tooltip />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  paddingTop: '6px',
+                }}
+              />
+
+              <Line
+                type="monotone"
+                dataKey="energia"
+                name="Energía"
+                stroke="#16a34a"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+
+              <Line
+                type="monotone"
+                dataKey="animo"
+                name="Ánimo"
+                stroke="#7c3aed"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ChartPanel>
+
+          <ChartPanel
+            title="Sueño"
+            subtitle={`Promedio ${sleep} h · meta ${data.settings.sleepGoalHours} h`}
+            height={225}
+          >
+            <LineChart
+              data={sleepTrendData}
+              margin={{
+                top: 8,
+                right: 10,
+                left: -20,
+                bottom: 0,
+              }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+              />
+
+              <XAxis
+                dataKey="fecha"
+                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis tick={{ fontSize: 10 }} />
+
+              <Tooltip />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  paddingTop: '6px',
+                }}
+              />
+
+              <Line
+                type="monotone"
+                dataKey="horas"
+                name="Horas"
+                stroke="#2563eb"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+
+              <Line
+                type="monotone"
+                dataKey="calidad"
+                name="Calidad"
+                stroke="#7c3aed"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+
+              <Line
+                type="monotone"
+                dataKey="energia"
+                name="Energía al despertar"
+                stroke="#16a34a"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ChartPanel>
+
+          <ChartPanel
+            title="Alimentación consciente"
+            subtitle={`Planificadas ${mealPercent}% · hambre y saciedad en escala 0–5`}
+            height={240}
+          >
+            <LineChart
+              data={foodTrendData}
+              margin={{
+                top: 8,
+                right: 10,
+                left: -20,
+                bottom: 0,
+              }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+              />
+
+              <XAxis
+                dataKey="clave"
+                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+                tickFormatter={(clave) => {
+                  const registro =
+                    foodTrendData.find(
+                      (item) =>
+                        item.clave ===
+                        String(clave),
+                    )
+
+                  return registro?.etiqueta.slice(
+                    0,
+                    5,
+                  ) ?? ''
+                }}
+              />
+
+              <YAxis
+                domain={[0, 5]}
+                ticks={[0, 1, 2, 3, 4, 5]}
+                allowDecimals={false}
+                tick={{ fontSize: 10 }}
+              />
+
+              <Tooltip
+                cursor={{
+                  stroke: '#94a3b8',
+                  strokeDasharray: '3 3',
+                }}
+                wrapperStyle={{
+                  zIndex: 1000,
+                  pointerEvents: 'none',
+                }}
+                labelFormatter={(clave) => {
+                  const registro =
+                    foodTrendData.find(
+                      (item) =>
+                        item.clave ===
+                        String(clave),
+                    )
+
+                  return registro
+                    ? `Fecha: ${registro.etiqueta}`
+                    : ''
+                }}
+                formatter={(value, name) => [
+                  `${Number(value)}/5`,
+                  String(name),
+                ]}
+              />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  paddingTop: '6px',
+                }}
+              />
+
+              <Line
+                dataKey="hambre"
+                name="Hambre"
+                type="monotone"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                isAnimationActive={false}
+                dot={{
+                  r: 3,
+                  stroke: '#f59e0b',
+                  strokeWidth: 2,
+                  fill: '#fff',
+                }}
+                activeDot={{
+                  r: 6,
+                  stroke: '#f59e0b',
+                  strokeWidth: 2,
+                  fill: '#fff',
+                }}
+              />
+
+              <Line
+                dataKey="saciedad"
+                name="Saciedad"
+                type="monotone"
+                stroke="#16a34a"
+                strokeWidth={2}
+                isAnimationActive={false}
+                dot={{
+                  r: 3,
+                  stroke: '#16a34a',
+                  strokeWidth: 2,
+                  fill: '#fff',
+                }}
+                activeDot={{
+                  r: 6,
+                  stroke: '#16a34a',
+                  strokeWidth: 2,
+                  fill: '#fff',
+                }}
+              />
+
+              <Line
+                dataKey="planificada"
+                name="Planificada"
+                type="monotone"
+                stroke="#2563eb"
+                strokeWidth={2}
+                isAnimationActive={false}
+                dot={false}
+              />
+            </LineChart>
+          </ChartPanel>
+
+          <ChartPanel
+            title="Peso"
+            subtitle={
+              weightChange === undefined
+                ? 'Registra al menos dos pesos para ver el cambio'
+                : `Cambio del periodo: ${
+                    weightChange >= 0 ? '+' : ''
+                  }${weightChange} lb`
+            }
+            height={240}
+          >
+            <LineChart
+              data={weightData}
+              margin={{
+                top: 8,
+                right: 10,
+                left: -10,
+                bottom: 0,
+              }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+              />
+
+              <XAxis
+                dataKey="clave"
+                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+                tickFormatter={(clave) => {
+                  const registro =
+                    weightData.find(
+                      (item) =>
+                        item.clave ===
+                        String(clave),
+                    )
+
+                  return registro?.etiqueta.slice(
+                    0,
+                    5,
+                  ) ?? ''
+                }}
+              />
+
+              <YAxis
+                domain={[
+                  'dataMin - 5',
+                  'dataMax + 5',
+                ]}
+                tick={{ fontSize: 10 }}
+              />
+
+              <Tooltip
+                cursor={{
+                  stroke: '#94a3b8',
+                  strokeDasharray: '3 3',
+                }}
+                wrapperStyle={{
+                  zIndex: 1000,
+                  pointerEvents: 'none',
+                }}
+                labelFormatter={(clave) => {
+                  const registro =
+                    weightData.find(
+                      (item) =>
+                        item.clave ===
+                        String(clave),
+                    )
+
+                  return registro
+                    ? `Fecha: ${registro.etiqueta}`
+                    : ''
+                }}
+                formatter={(value) => [
+                  `${Number(value).toFixed(
+                    1,
+                  )} lb`,
+                  'Peso',
+                ]}
+              />
+
+              <Line
+                dataKey="peso"
+                name="Peso"
+                type="monotone"
+                stroke="#0f766e"
+                strokeWidth={3}
+                isAnimationActive={false}
+                dot={{
+                  r: 4,
+                  stroke: '#0f766e',
+                  strokeWidth: 2,
+                  fill: '#fff',
+                }}
+                activeDot={{
+                  r: 7,
+                  stroke: '#0f766e',
+                  strokeWidth: 3,
+                  fill: '#fff',
+                }}
+              />
+            </LineChart>
+          </ChartPanel>
+        </div>
+      </section>
+
+      <section className="progress-chart-section">
+        <div className="progress-analysis-section-heading progress-chart-section__heading">
+          <div>
+            <span>Recursos y uso del tiempo</span>
+            <h2>Finanzas y recreación</h2>
+          </div>
+        </div>
+
+        <div className="progress-chart-grid">
+          <ChartPanel
+            title="Ingresos y gastos"
+            subtitle={`Balance del periodo ${formatSignedCurrency(
+              periodFinance.netFlow,
+              data.settings.currency,
+            )}`}
+            height={230}
+          >
+            <BarChart
+              data={financeData}
+              margin={{
+                top: 8,
+                right: 8,
+                left: -12,
+                bottom: 0,
+              }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+              />
+
+              <XAxis
+                dataKey="fecha"
+                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis tick={{ fontSize: 10 }} />
+
+              <Tooltip
+                formatter={(value, name) => [
+                  formatCurrency(
+                    Number(value),
+                    data.settings.currency,
+                  ),
+                  String(name),
+                ]}
+              />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  paddingTop: '6px',
+                }}
+              />
+
+              <Bar
+                dataKey="ingresos"
+                name="Ingresos"
+                fill="#16a34a"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+
+              <Bar
+                dataKey="gastos"
+                name="Gastos"
+                fill="#dc2626"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+            </BarChart>
+          </ChartPanel>
+
+          <ChartPanel
+            title="TikTok por tipo"
+            subtitle={`${formatMinutes(
+              creativeMinutes,
+            )} creativo · ${formatMinutes(
+              scrollMinutes,
+            )} scroll`}
+            height={230}
+          >
+            <BarChart
+              data={tiktokData}
+              margin={{
+                top: 8,
+                right: 8,
+                left: -18,
+                bottom: 12,
+              }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+              />
+
+              <XAxis
+                dataKey="type"
+                tick={{ fontSize: 9 }}
+                interval={0}
+                tickFormatter={(value) => {
+                  if (
+                    value ===
+                    'Creacion de contenido'
+                  ) {
+                    return 'Creación'
+                  }
+
+                  if (
+                    value ===
+                    'Consumo intencional'
+                  ) {
+                    return 'Intencional'
+                  }
+
+                  return 'Scroll'
+                }}
+              />
+
+              <YAxis tick={{ fontSize: 10 }} />
+
+              <Tooltip
+                formatter={(value) =>
+                  formatMinutes(Number(value))
+                }
+              />
+
+              <Bar
+                dataKey="minutos"
+                name="Minutos"
+                fill="#2563eb"
+                radius={[5, 5, 0, 0]}
+                isAnimationActive={false}
+              />
+            </BarChart>
+          </ChartPanel>
+        </div>
+      </section>
+
+      <section className="panel progress-personal-reading">
+        <div className="progress-analysis-section-heading">
+          <div>
+            <span>Contexto personal</span>
+            <h2>Lectura personal</h2>
+          </div>
+
+          <Sparkles size={19} aria-hidden="true" />
+        </div>
+
+        <div className="progress-personal-grid">
+          <article className="progress-profile-compact">
+            <header>
+              <span>
+                <UserRound
+                  size={18}
+                  aria-hidden="true"
+                />
+              </span>
+
+              <div>
+                <strong>Perfil base</strong>
+                <small>{profileLine}</small>
+              </div>
+            </header>
+
             <div className="bmi-scale-card">
               <div className="bmi-scale-heading">
                 <span>IMC actual</span>
-                <strong>{profile.bodyMassIndex ?? '--'}</strong>
+                <strong>
+                  {profile.bodyMassIndex ?? '--'}
+                </strong>
               </div>
-              <div className="bmi-scale" aria-label="Escala visual de IMC">
-                <span className="bmi-segment bmi-low">Bajo</span>
-                <span className="bmi-segment bmi-reference">Referencia</span>
-                <span className="bmi-segment bmi-over">Sobre</span>
-                <span className="bmi-segment bmi-high">Obesidad</span>
-                {bmiPosition !== undefined ? <span className="bmi-marker" style={{ left: `${bmiPosition}%` }} /> : null}
+
+              <div
+                className="bmi-scale"
+                aria-label="Escala visual de IMC"
+              >
+                <span className="bmi-segment bmi-low">
+                  Bajo
+                </span>
+
+                <span className="bmi-segment bmi-reference">
+                  Referencia
+                </span>
+
+                <span className="bmi-segment bmi-over">
+                  Sobre
+                </span>
+
+                <span className="bmi-segment bmi-high">
+                  Obesidad
+                </span>
+
+                {bmiPosition !== undefined ? (
+                  <span
+                    className="bmi-marker"
+                    style={{
+                      left: `${bmiPosition}%`,
+                    }}
+                  />
+                ) : null}
               </div>
+
               <div className="bmi-scale-labels">
                 <span>18.5</span>
                 <span>24.9</span>
                 <span>30</span>
               </div>
             </div>
-            <div className="body-metric-grid">
+
+            <div className="progress-body-mini-grid">
               <div>
                 <span>IMC ideal</span>
-                <strong>{profile.bmiReferenceTarget ?? 'Pendiente'}</strong>
-                <small>Centro practico</small>
+                <strong>
+                  {profile.bmiReferenceTarget ??
+                    'Pendiente'}
+                </strong>
               </div>
+
               <div>
                 <span>Rango IMC</span>
                 <strong>{bmiReferenceLine}</strong>
-                <small>Adultos 20+</small>
               </div>
+
               <div>
-                <span>Rango de peso</span>
-                <strong>{weightReferenceLine}</strong>
-                <small>Segun altura</small>
+                <span>Rango peso</span>
+                <strong>
+                  {weightReferenceLine}
+                </strong>
               </div>
+
               <div>
-                <span>Peso ideal estimado</span>
+                <span>Peso estimado</span>
                 <strong>{targetWeightLine}</strong>
-                <small>IMC 22</small>
               </div>
-              <div>
-                <span>Distancia</span>
+
+              <div className="progress-body-mini-wide">
+                <span>Distancia al rango</span>
                 <strong>{distanceLine}</strong>
-                <small>Contra el rango</small>
               </div>
             </div>
-            <div className="actions">
-              <Link className="button button-secondary" to="/configuracion">
-                <span>Editar perfil</span>
+
+            <div className="progress-profile-links">
+              <Link
+                className="button button-secondary"
+                to="/configuracion"
+              >
+                Editar perfil
               </Link>
-              <Link className="button button-secondary" to="/bienestar">
-                <span>Registrar bienestar</span>
+
+              <Link
+                className="button button-secondary"
+                to="/bienestar"
+              >
+                Bienestar
               </Link>
-              <Link className="button button-secondary" to="/motivacion">
-                <span>Motivacion</span>
+
+              <Link
+                className="button button-secondary"
+                to="/motivacion"
+              >
+                Motivación
               </Link>
             </div>
-          </div>
-          <div className="progress-recommendation-list">
-            <article className="body-summary-card">
+          </article>
+
+          <div className="progress-insight-list">
+            <article className="progress-insight-card is-primary">
               <strong>{bodySummary.title}</strong>
               <p>{bodySummary.description}</p>
             </article>
-            {recommendations.slice(0, 1).map((item) => (
-              <p key={item}>{item}</p>
-            ))}
-            {recommendations.slice(2, 4).map((item) => (
-              <p key={item}>{item}</p>
-            ))}
-          </div>
-        </div>
-        {motivation.length > 0 ? (
-          <div className="progress-motivation-callout">
-            <strong>Animo bajo detectado</strong>
-            <div className="mobile-card-list">
-              {motivation.slice(0, 3).map((item) => (
-                <article className="mobile-card" key={item.id}>
-                  <strong>{item.title}</strong>
-                  <span>{item.personalNote ?? item.url ?? 'Motivacion guardada'}</span>
+
+            {recommendations
+              .slice(0, 4)
+              .map((item) => (
+                <article
+                  className="progress-insight-card"
+                  key={item}
+                >
+                  <p>{item}</p>
                 </article>
               ))}
+          </div>
+        </div>
+
+        {motivation.length > 0 ? (
+          <div className="progress-motivation-compact">
+            <strong>Motivación disponible</strong>
+
+            <div>
+              {motivation
+                .slice(0, 3)
+                .map((item) => (
+                  <article key={item.id}>
+                    <strong>{item.title}</strong>
+                    <span>
+                      {item.personalNote ??
+                        item.url ??
+                        'Motivación guardada'}
+                    </span>
+                  </article>
+                ))}
             </div>
           </div>
         ) : null}
       </section>
-      <section className="panel report-panel">
-        <div className="panel-header">
-          <h2>Informe del periodo</h2>
-          <span>{safeStart} a {safeEnd}</span>
+
+      <section className="panel progress-conclusions">
+        <div className="progress-analysis-section-heading">
+          <div>
+            <span>Interpretación automática</span>
+            <h2>Conclusiones del periodo</h2>
+          </div>
+
+          <span className="progress-range-label">
+            {safeStart} · {safeEnd}
+          </span>
         </div>
-        <div className="report-grid">
-          <article>
-            <strong>Lectura general</strong>
-            <p>{report.overview}</p>
-          </article>
-          <article>
-            <strong>Habitos</strong>
-            <p>{report.habits}</p>
-          </article>
-          <article>
-            <strong>Perfil y peso</strong>
-            <p>{report.body}</p>
-          </article>
-          <article>
-            <strong>Trabajo</strong>
-            <p>{report.work}</p>
-          </article>
-          <article>
-            <strong>Finanzas</strong>
-            <p>{report.finances}</p>
-          </article>
-          <article>
-            <strong>Sueno, animo y alimentacion</strong>
-            <p>{report.wellbeing}</p>
-          </article>
-        </div>
-      </section>
-      <section className="panel">
-        <div className="panel-header">
-          <h2>Estado por area</h2>
-          <CalendarDays size={20} />
-        </div>
-        <div className="area-status-grid">
-          {areaCards.map((area) => (
-            <article className={`area-status-card area-${area.tone}`} key={area.title}>
-              <div className="area-status-header">
-                <span>{area.icon}</span>
-                <strong>{area.title}</strong>
-              </div>
-              <div className="area-status-value">
-                <strong>{area.value}</strong>
-                <span>{area.score}%</span>
-              </div>
-              <div className="area-progress" aria-label={`${area.title} ${area.score}%`}>
-                <span style={{ width: `${area.score}%` }} />
-              </div>
-              <p>{area.detail}</p>
-              <small>{area.action}</small>
+
+        <div className="progress-conclusion-grid">
+          {[
+            ['Lectura general', report.overview],
+            ['Hábitos', report.habits],
+            ['Perfil y peso', report.body],
+            ['Trabajo', report.work],
+            ['Finanzas', report.finances],
+            [
+              'Sueño, ánimo y alimentación',
+              report.wellbeing,
+            ],
+          ].map(([title, body]) => (
+            <article key={title}>
+              <strong>{title}</strong>
+              <p>{body}</p>
             </article>
           ))}
         </div>
       </section>
-      <div className="two-column">
-        <ChartPanel title="Consistencia mensual" className="full-row">
-          <LineChart data={consistencyData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="fecha" interval="preserveStartEnd" />
-            <YAxis domain={[0, 120]} tickFormatter={(value) => `${value}%`} />
-            <Tooltip formatter={(value) => `${Number(value)}%`} />
-            <Line dataKey="consistencia" name="Consistencia" stroke="#2563eb" strokeWidth={2} />
-            <Line dataKey="minimos" name="Minimos" stroke="#16a34a" strokeWidth={2} />
-            <Line dataKey="objetivos" name="Objetivos" stroke="#f59e0b" strokeWidth={2} />
-          </LineChart>
-        </ChartPanel>
-        <ChartPanel title="Habitos clave">
-          <LineChart data={habitData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="fecha" interval="preserveStartEnd" />
-            <YAxis domain={[0, 120]} tickFormatter={(value) => `${value}%`} />
-            <Tooltip formatter={(value) => `${Number(value)}%`} />
-            {trackedHabits.map((trackedHabit, index) => (
-              <Line key={trackedHabit.id} dataKey={trackedHabit.id} name={trackedHabit.name} stroke={habitLineColors[index % habitLineColors.length]} strokeWidth={2} dot={false} />
-            ))}
-          </LineChart>
-        </ChartPanel>
-        <ChartPanel title="Energia y animo">
-          <LineChart data={moodEnergyData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="fecha" interval="preserveStartEnd" />
-            <YAxis domain={[1, 5]} />
-            <Tooltip />
-            <Line dataKey="energia" stroke="#16a34a" strokeWidth={2} />
-            <Line dataKey="animo" stroke="#7c3aed" strokeWidth={2} />
-          </LineChart>
-        </ChartPanel>
-        <ChartPanel title="Sueno">
-          <LineChart data={sleepTrendData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="fecha" interval="preserveStartEnd" />
-            <YAxis />
-            <Tooltip />
-            <Line dataKey="horas" name="Horas" stroke="#2563eb" strokeWidth={2} />
-            <Line dataKey="calidad" name="Calidad" stroke="#7c3aed" strokeWidth={2} />
-            <Line dataKey="energia" name="Energia" stroke="#16a34a" strokeWidth={2} />
-          </LineChart>
-        </ChartPanel>
-        <ChartPanel title="Alimentacion consciente">
-  <LineChart
-    data={foodTrendData}
-    margin={{ top: 10, right: 20, left: 0, bottom: 15 }}
-  >
-    <CartesianGrid strokeDasharray="3 3" />
-
-    <XAxis
-      dataKey="clave"
-      interval="preserveStartEnd"
-      tickFormatter={(clave) => {
-        const registro = foodTrendData.find(
-          (item) => item.clave === String(clave),
-        )
-
-        return registro?.etiqueta ?? ''
-      }}
-    />
-
-    <YAxis
-      domain={[0, 5]}
-      ticks={[0, 1, 2, 3, 4, 5]}
-      allowDecimals={false}
-    />
-
-    <Tooltip
-      cursor={{
-        stroke: '#94a3b8',
-        strokeDasharray: '3 3',
-      }}
-      wrapperStyle={{
-        zIndex: 1000,
-        pointerEvents: 'none',
-      }}
-      labelFormatter={(clave) => {
-        const registro = foodTrendData.find(
-          (item) => item.clave === String(clave),
-        )
-
-        return registro ? `Fecha: ${registro.etiqueta}` : ''
-      }}
-      formatter={(value, name) => [
-        `${Number(value)}/5`,
-        String(name),
-      ]}
-    />
-
-    <Line
-      dataKey="hambre"
-      name="Hambre"
-      type="monotone"
-      stroke="#f59e0b"
-      strokeWidth={2}
-      isAnimationActive={false}
-      dot={{
-        r: 4,
-        stroke: '#f59e0b',
-        strokeWidth: 2,
-        fill: '#fff',
-      }}
-      activeDot={{
-        r: 7,
-        stroke: '#f59e0b',
-        strokeWidth: 2,
-        fill: '#fff',
-      }}
-    />
-
-    <Line
-      dataKey="saciedad"
-      name="Saciedad"
-      type="monotone"
-      stroke="#16a34a"
-      strokeWidth={2}
-      isAnimationActive={false}
-      dot={{
-        r: 4,
-        stroke: '#16a34a',
-        strokeWidth: 2,
-        fill: '#fff',
-      }}
-      activeDot={{
-        r: 7,
-        stroke: '#16a34a',
-        strokeWidth: 2,
-        fill: '#fff',
-      }}
-    />
-
-    <Line
-      dataKey="planificada"
-      name="Planificada"
-      type="monotone"
-      stroke="#2563eb"
-      strokeWidth={2}
-      isAnimationActive={false}
-      dot={{
-        r: 4,
-        stroke: '#2563eb',
-        strokeWidth: 2,
-        fill: '#fff',
-      }}
-      activeDot={{
-        r: 7,
-        stroke: '#2563eb',
-        strokeWidth: 2,
-        fill: '#fff',
-      }}
-    />
-  </LineChart>
-</ChartPanel>
-        <ChartPanel title="Peso">
-  <LineChart
-    data={weightData}
-    margin={{ top: 10, right: 20, left: 0, bottom: 15 }}
-  >
-    <CartesianGrid strokeDasharray="3 3" />
-
-    <XAxis
-      dataKey="clave"
-      interval="preserveStartEnd"
-      tickFormatter={(clave) => {
-        const registro = weightData.find(
-          (item) => item.clave === String(clave),
-        )
-
-        return registro?.etiqueta ?? ''
-      }}
-    />
-
-    <YAxis domain={['dataMin - 5', 'dataMax + 5']} />
-
-    <Tooltip
-      cursor={{
-        stroke: '#94a3b8',
-        strokeDasharray: '3 3',
-      }}
-      wrapperStyle={{
-        zIndex: 1000,
-        pointerEvents: 'none',
-      }}
-      labelFormatter={(clave) => {
-        const registro = weightData.find(
-          (item) => item.clave === String(clave),
-        )
-
-        return registro ? `Fecha: ${registro.etiqueta}` : ''
-      }}
-      formatter={(value) => [
-        `${Number(value).toFixed(1)} lb`,
-        'Peso',
-      ]}
-    />
-
-    <Line
-      dataKey="peso"
-      name="Peso"
-      type="monotone"
-      stroke="#0f766e"
-      strokeWidth={3}
-      isAnimationActive={false}
-      dot={{
-        r: 6,
-        stroke: '#0f766e',
-        strokeWidth: 2,
-        fill: '#fff',
-      }}
-      activeDot={{
-        r: 9,
-        stroke: '#0f766e',
-        strokeWidth: 3,
-        fill: '#fff',
-      }}
-    />
-  </LineChart>
-</ChartPanel>
-        <ChartPanel title="Ingresos y gastos">
-          <BarChart data={financeData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="fecha" interval="preserveStartEnd" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="ingresos" fill="#16a34a" />
-            <Bar dataKey="gastos" fill="#dc2626" />
-          </BarChart>
-        </ChartPanel>
-        <ChartPanel title="TikTok por tipo">
-          <BarChart data={tiktokData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="type" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="minutos" fill="#2563eb" />
-          </BarChart>
-        </ChartPanel>
-      </div>
     </section>
   )
 }
 
-function ChartPanel({ title, children, className = '' }: { title: string; children: React.ReactElement; className?: string }) {
+function ChartPanel({
+  title,
+  subtitle,
+  children,
+  className = '',
+  height = 230,
+}: {
+  title: string
+  subtitle?: string
+  children: ReactElement
+  className?: string
+  height?: number
+}) {
   return (
-    <section className={`panel ${className}`}>
-      <div className="panel-header">
-        <h2>{title}</h2>
+    <section
+      className={`panel progress-analysis-chart ${className}`}
+    >
+      <div className="progress-analysis-chart__header">
+        <div>
+          <h3>{title}</h3>
+
+          {subtitle ? (
+            <span>{subtitle}</span>
+          ) : null}
+        </div>
       </div>
-      <ResponsiveContainer width="100%" height={280}>
-        {children}
-      </ResponsiveContainer>
+
+      <div className="progress-analysis-chart__canvas">
+        <ResponsiveContainer
+          width="100%"
+          height={height}
+        >
+          {children}
+        </ResponsiveContainer>
+      </div>
     </section>
   )
 }
