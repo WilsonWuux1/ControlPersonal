@@ -100,7 +100,7 @@ interface AppStore {
   allocateFund: (fundId: string, amount: number) => Promise<void>
   deleteFund: (id: string) => Promise<void>
   payObligation: (payload: { obligationId: string; accountId: string; amount: number; fundId?: string }) => Promise<void>
-  payDebt: (payload: { debtId: string; accountId: string; amount: number }) => Promise<void>
+  payDebt: (payload: { debtId: string; accountId: string; amount: number; date?: string }) => Promise<void>
   addPrinciple: (principle: EntityDraft<Principle>) => Promise<void>
   updatePrinciple: (principle: Principle) => Promise<void>
   addMotivationLink: (link: EntityDraft<MotivationLink>) => Promise<void>
@@ -387,11 +387,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
       funds: fund ? data.funds.map((item) => (item.id === fund.id ? { ...item, currentAmount: Math.max(0, item.currentAmount - amount), updatedAt: nowIso() } : item)) : data.funds,
     }))) await refresh(set)
   },
-  payDebt: async ({ debtId, accountId, amount }) => {
+  payDebt: async ({ debtId, accountId, amount, date }) => {
     const debt = await db.debts.get(debtId)
     if (!debt) return
+    const paymentDate = date || todayIso()
+    const today = todayIso()
+    const movementDateTime = paymentDate === today ? nowIso() : `${paymentDate}T12:00:00`
+
     const movement = withBase<FinancialMovement>({
-      dateTime: nowIso(),
+      dateTime: movementDateTime,
       accountId,
       type: 'Pago de deuda',
       amount,
@@ -400,7 +404,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       debtId,
       tags: ['deuda'],
     })
-    const debtPayment = withBase<DebtPayment>({ debtId, movementId: movement.id, amount, date: todayIso() })
+    const debtPayment = withBase<DebtPayment>({ debtId, movementId: movement.id, amount, date: paymentDate })
     await db.transaction('rw', db.movements, db.debts, db.debtPayments, async () => {
       await db.movements.add(movement)
       const nextDebt = { ...applyDebtPayment(debt, amount), updatedAt: nowIso() }

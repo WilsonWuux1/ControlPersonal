@@ -24,7 +24,7 @@ import { calculateAccountBalances, calculateFinancialSummary, distributePaycheck
 import { formatCurrency } from '../../utils/format'
 import { dateTimeLocalValue, fromDateTimeLocal, nowIso, todayIso } from '../../utils/date'
 import type { AppData, FinancialMovement, Obligation } from '../../types/domain'
-import { initialExpenseCategories } from '../../db/initialData'
+import { initialExpenseCategories, initialIncomeCategories } from '../../db/initialData'
 
 type FinanceModal = 'account' | 'movement' | 'obligation' | 'debt' | 'fund' | 'paycheck' | null
 
@@ -47,6 +47,7 @@ export function FinancesPage() {
   const allocateFund = useAppStore((state) => state.allocateFund)
   const deleteFund = useAppStore((state) => state.deleteFund)
   const payObligation = useAppStore((state) => state.payObligation)
+  const payDebt = useAppStore((state) => state.payDebt)
 
   const [filter, setFilter] = useState('')
   const [showAllMovements, setShowAllMovements] = useState(false)
@@ -452,22 +453,12 @@ export function FinancesPage() {
         </summary>
 
         <div className="finance-collapse__body">
-          <div className="finance-debt-list">
-            {activeDebts.map((debt) => (
-              <article className="finance-debt-row" key={debt.id}>
-                <div>
-                  <strong>{debt.name}</strong>
-                  <span>
-                    {debt.creditor} · mínimo {formatCurrency(debt.minimumPayment, currency)}
-                  </span>
-                </div>
-
-                <strong>{formatCurrency(debt.currentBalance, currency)}</strong>
-              </article>
-            ))}
-
-            {activeDebts.length === 0 ? <p className="muted">No hay deudas activas.</p> : null}
-          </div>
+          <DebtsPanel
+            currency={currency}
+            accounts={data.accounts}
+            debts={activeDebts}
+            payDebt={payDebt}
+          />
         </div>
       </details>
 
@@ -907,6 +898,176 @@ function ObligationsPanel({ currency, accounts, funds, obligations, payObligatio
   )
 }
 
+
+interface DebtsPanelProps {
+  currency: string
+  accounts: AppData['accounts']
+  debts: AppData['debts']
+  payDebt: ReturnType<typeof useAppStore.getState>['payDebt']
+}
+
+function DebtsPanel({ currency, accounts, debts, payDebt }: DebtsPanelProps) {
+  const [payments, setPayments] = useState<Record<string, { amount: string; accountId: string; date: string }>>({})
+  const [payingId, setPayingId] = useState<string | null>(null)
+  const firstAccount = accounts[0]?.id ?? ''
+
+  const updatePayment = (debtId: string, key: 'amount' | 'accountId' | 'date', value: string) => {
+    setPayments((current) => ({
+      ...current,
+      [debtId]: {
+        amount: current[debtId]?.amount ?? '',
+        accountId: current[debtId]?.accountId ?? firstAccount,
+        date: current[debtId]?.date ?? todayIso(),
+        [key]: value,
+      },
+    }))
+  }
+
+  return (
+    <div className="finance-debt-list">
+      {debts.map((debt) => {
+        const suggestedAmount =
+          debt.minimumPayment > 0 ? Math.min(debt.minimumPayment, debt.currentBalance) : debt.currentBalance
+        const form = payments[debt.id] ?? {
+          amount: String(suggestedAmount || ''),
+          accountId: firstAccount,
+          date: todayIso(),
+        }
+        const paymentAmount = Number(form.amount || 0)
+        const isPaying = payingId === debt.id
+        const validPayment =
+          Boolean(form.accountId) &&
+          Number.isFinite(paymentAmount) &&
+          paymentAmount > 0 &&
+          paymentAmount <= debt.currentBalance
+        const remainingBalance = Math.max(0, debt.currentBalance - (Number.isFinite(paymentAmount) ? paymentAmount : 0))
+
+        return (
+          <article className="finance-obligation-card" key={debt.id}>
+            <header className="finance-obligation-card__header">
+              <div>
+                <strong>{debt.name}</strong>
+                <span>
+                  {debt.creditor}
+                  {debt.minimumPayment > 0 ? ` · mínimo ${formatCurrency(debt.minimumPayment, currency)}` : ''}
+                </span>
+              </div>
+
+              {!isPaying ? (
+                <button
+                  type="button"
+                  className="finance-icon-action"
+                  aria-label={`Registrar pago de ${debt.name}`}
+                  title="Registrar pago"
+                  onClick={() => setPayingId(debt.id)}
+                >
+                  <Plus size={16} aria-hidden="true" />
+                </button>
+              ) : null}
+            </header>
+
+            <div className="finance-obligation-card__amount">
+              <span>Pendiente</span>
+              <strong>{formatCurrency(debt.currentBalance, currency)}</strong>
+            </div>
+
+            {isPaying ? (
+              <div className="finance-obligation-payment">
+                <div className="finance-obligation-payment__grid">
+                  <label>
+                    Monto
+                    <input
+                      type="number"
+                      min="0.01"
+                      max={debt.currentBalance}
+                      step="0.01"
+                      value={form.amount}
+                      onChange={(event) => updatePayment(debt.id, 'amount', event.target.value)}
+                    />
+                  </label>
+
+                  <label>
+                    Cuenta
+                    <select
+                      value={form.accountId}
+                      onChange={(event) => updatePayment(debt.id, 'accountId', event.target.value)}
+                    >
+                      {accounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Fecha
+                    <input
+                      type="date"
+                      value={form.date}
+                      max={todayIso()}
+                      onChange={(event) => updatePayment(debt.id, 'date', event.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <div className="notice info">
+                  <p>
+                    Saldo después del pago: <strong>{formatCurrency(remainingBalance, currency)}</strong>
+                  </p>
+                </div>
+
+                <div className="finance-obligation-payment__actions">
+                  <Button
+                    onClick={async () => {
+                      if (!validPayment) return
+
+                      await payDebt({
+                        debtId: debt.id,
+                        accountId: form.accountId,
+                        amount: paymentAmount,
+                        date: form.date,
+                      })
+
+                      setPayments((current) => {
+                        const next = { ...current }
+                        delete next[debt.id]
+                        return next
+                      })
+                      setPayingId(null)
+                    }}
+                    disabled={!validPayment}
+                  >
+                    Registrar pago
+                  </Button>
+
+                  <button
+                    type="button"
+                    className="finance-icon-action"
+                    aria-label="Cerrar formulario de pago"
+                    title="Cerrar"
+                    onClick={() => setPayingId(null)}
+                  >
+                    <X size={16} aria-hidden="true" />
+                  </button>
+                </div>
+
+                {paymentAmount > debt.currentBalance ? (
+                  <p className="error-text" role="alert">
+                    El pago no puede superar el saldo pendiente.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </article>
+        )
+      })}
+
+      {debts.length === 0 ? <p className="muted">No hay deudas activas.</p> : null}
+    </div>
+  )
+}
+
 function SimpleFinanceModal(props: SimpleFinanceModalProps) {
   const [form, setForm] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
@@ -923,6 +1084,9 @@ function SimpleFinanceModal(props: SimpleFinanceModalProps) {
   const set = (key: string, value: string) => setForm((current) => ({ ...current, [key]: value }))
   const amount = Number(form.amount ?? 0)
   const firstAccount = props.accounts[0]?.id ?? ''
+  const movementType = ((form.type as FinancialMovement['type']) || 'Gasto') as FinancialMovement['type']
+  const movementCategories = movementType === 'Ingreso' ? initialIncomeCategories : initialExpenseCategories
+  const defaultMovementCategory = movementCategories[0] ?? 'Otro'
 
   const input = (key: string, label: string, type = 'text') => (
     <label>
@@ -975,9 +1139,9 @@ function SimpleFinanceModal(props: SimpleFinanceModalProps) {
         await props.addMovement({
           dateTime: fromDateTimeLocal(form.dateTime || dateTimeLocalValue()),
           accountId: form.accountId || firstAccount,
-          type: (form.type as FinancialMovement['type']) || 'Gasto',
+          type: movementType,
           amount,
-          category: form.category || 'Otro',
+          category: form.category || defaultMovementCategory,
           description: form.description?.trim() || 'Movimiento',
           tags: [],
         })
@@ -1075,12 +1239,22 @@ function SimpleFinanceModal(props: SimpleFinanceModalProps) {
 
             <label>
               Tipo
-              <select value={form.type ?? 'Gasto'} onChange={(event) => set('type', event.target.value)}>
-                {['Ingreso', 'Gasto', 'Transferencia', 'Pago de deuda', 'Pago de obligacion', 'Ajuste', 'Reembolso'].map(
-                  (type) => (
-                    <option key={type}>{type}</option>
-                  ),
-                )}
+              <select
+                value={movementType}
+                onChange={(event) => {
+                  const nextType = event.target.value as FinancialMovement['type']
+                  const nextCategories = nextType === 'Ingreso' ? initialIncomeCategories : initialExpenseCategories
+
+                  setForm((current) => ({
+                    ...current,
+                    type: nextType,
+                    category: nextCategories[0] ?? 'Otro',
+                  }))
+                }}
+              >
+                {['Ingreso', 'Gasto', 'Transferencia', 'Ajuste', 'Reembolso'].map((type) => (
+                  <option key={type}>{type}</option>
+                ))}
               </select>
             </label>
 
@@ -1088,8 +1262,11 @@ function SimpleFinanceModal(props: SimpleFinanceModalProps) {
 
             <label>
               Categoría
-              <select value={form.category ?? 'Comida'} onChange={(event) => set('category', event.target.value)}>
-                {initialExpenseCategories.map((category) => (
+              <select
+                value={form.category ?? defaultMovementCategory}
+                onChange={(event) => set('category', event.target.value)}
+              >
+                {movementCategories.map((category) => (
                   <option key={category}>{category}</option>
                 ))}
               </select>
