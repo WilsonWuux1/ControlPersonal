@@ -22,6 +22,9 @@ import { averageSleepHours } from '../../services/timeCalculations'
 import { todayIso } from '../../utils/date'
 import { formatCurrency, formatMinutes } from '../../utils/format'
 import { bodyProfileSummary, getProfileSummary, motivationForLowMood, recommendationSeed } from '../../services/personalInsights'
+import { generateDailyEvaluation } from '../../services/insights/evaluationEngine'
+import { financeInsights } from '../../services/insights/financeInsightEngine'
+import { studyInsights } from '../../services/insights/studyInsightEngine'
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, Math.round(value)))
 const habitLineColors = ['#16a34a', '#2563eb', '#db2777', '#9333ea', '#e11d48', '#0f766e', '#0284c7']
@@ -340,6 +343,8 @@ const selectedPeriodStyle = {
   const bodySummary = bodyProfileSummary({ ...data, sleepLogs: filteredSleepLogs, mealLogs: filteredMealLogs, trainingLogs: filteredTrainingLogs })
   const recommendations = recommendationSeed(data)
   const motivation = motivationForLowMood(data)
+  const dailyEvaluation = generateDailyEvaluation(data)
+  const patternInsights = [...studyInsights(data), ...financeInsights(data)].slice(0, 4)
   const plannedMeals = filteredMealLogs.length ? filteredMealLogs.filter((meal) => meal.planned).length / filteredMealLogs.length : 0
   const scrollMinutes = filteredRecreationLogs.filter((log) => log.type === 'Desplazamiento automatico').reduce((sum, log) => sum + log.durationMinutes, 0)
   const creativeMinutes = filteredRecreationLogs.filter((log) => log.type === 'Creacion de contenido').reduce((sum, log) => sum + log.durationMinutes, 0)
@@ -795,6 +800,39 @@ const selectedPeriodStyle = {
                 </label>
               </div>
             ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="panel progress-evaluation-panel">
+        <div className="progress-analysis-section-heading">
+          <div>
+            <span>Evaluaciones</span>
+            <h2>{dailyEvaluation.title}</h2>
+          </div>
+          <p>{dailyEvaluation.message}</p>
+        </div>
+        <div className="progress-evaluation-grid">
+          <article>
+            <strong>Siguiente paso</strong>
+            <p>{dailyEvaluation.mainAction}</p>
+          </article>
+          {dailyEvaluation.evidence.slice(0, 3).map((item) => (
+            <article key={item}>
+              <strong>Evidencia</strong>
+              <p>{item}</p>
+            </article>
+          ))}
+        </div>
+        {patternInsights.length > 0 ? (
+          <div className="progress-pattern-grid">
+            {patternInsights.map((insight) => (
+              <article key={insight.id}>
+                <span>{insight.area} · confianza {insight.confidence}</span>
+                <strong>{insight.title}</strong>
+                <p>{insight.message}</p>
+              </article>
+            ))}
           </div>
         ) : null}
       </section>

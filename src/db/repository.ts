@@ -37,6 +37,12 @@ export const entityTables = {
   dailyCheckIns: db.dailyCheckIns,
   moodEnergyLogs: db.moodEnergyLogs,
   weightLogs: db.weightLogs,
+  hydrationLogs: db.hydrationLogs,
+  courses: db.courses,
+  studyTopics: db.studyTopics,
+  courseActivities: db.courseActivities,
+  studySessions: db.studySessions,
+  appNotifications: db.appNotifications,
 } as const
 
 export const entityNames = Object.keys(entityTables) as BackupEntityName[]
@@ -94,6 +100,12 @@ export const loadAppData = async (): Promise<AppData> => {
     dailyCheckIns: await db.dailyCheckIns.toArray(),
     moodEnergyLogs: await db.moodEnergyLogs.toArray(),
     weightLogs: await db.weightLogs.toArray(),
+    hydrationLogs: await db.hydrationLogs.toArray(),
+    courses: await db.courses.toArray(),
+    studyTopics: await db.studyTopics.toArray(),
+    courseActivities: await db.courseActivities.toArray(),
+    studySessions: await db.studySessions.toArray(),
+    appNotifications: await db.appNotifications.toArray(),
   }
 }
 
@@ -127,5 +139,11 @@ export const replaceAllData = async (data: AppData): Promise<void> => {
     await db.dailyCheckIns.bulkAdd(data.dailyCheckIns)
     await db.moodEnergyLogs.bulkAdd(data.moodEnergyLogs ?? [])
     await db.weightLogs.bulkAdd(data.weightLogs ?? [])
+    await db.hydrationLogs.bulkAdd(data.hydrationLogs ?? [])
+    await db.courses.bulkAdd(data.courses ?? [])
+    await db.studyTopics.bulkAdd(data.studyTopics ?? [])
+    await db.courseActivities.bulkAdd(data.courseActivities ?? [])
+    await db.studySessions.bulkAdd(data.studySessions ?? [])
+    await db.appNotifications.bulkAdd(data.appNotifications ?? [])
   })
 }

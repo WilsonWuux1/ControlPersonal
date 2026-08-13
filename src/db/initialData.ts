@@ -43,6 +43,22 @@ export const createDefaultSettings = (): AppSettings => ({
     not_applicable: null,
   },
   demoMode: false,
+  hydrationGlassMl: 250,
+  hydrationBottleMl: 600,
+  movementReminderMinutes: 55,
+  notificationQuietStart: '22:30',
+  notificationQuietEnd: '07:00',
+  notificationPreferences: {
+    general: true,
+    habits: true,
+    movement: true,
+    hydration: true,
+    meals: true,
+    work: true,
+    study: true,
+    finance: true,
+    sleep: true,
+  },
 })
 
 export const createInitialHabits = (sleepGoalHours = 7): Habit[] => {

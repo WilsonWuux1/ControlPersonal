@@ -47,12 +47,30 @@ const countEntities = (data: AppData): Record<BackupEntityName, number> => ({
   dailyCheckIns: data.dailyCheckIns.length,
   moodEnergyLogs: data.moodEnergyLogs.length,
   weightLogs: data.weightLogs.length,
+  hydrationLogs: data.hydrationLogs.length,
+  courses: data.courses.length,
+  studyTopics: data.studyTopics.length,
+  courseActivities: data.courseActivities.length,
+  studySessions: data.studySessions.length,
+  appNotifications: data.appNotifications.length,
+})
+
+export const normalizeAppData = (data: AppData): AppData => ({
+  ...data,
+  moodEnergyLogs: data.moodEnergyLogs ?? [],
+  weightLogs: data.weightLogs ?? [],
+  hydrationLogs: data.hydrationLogs ?? [],
+  courses: data.courses ?? [],
+  studyTopics: data.studyTopics ?? [],
+  courseActivities: data.courseActivities ?? [],
+  studySessions: data.studySessions ?? [],
+  appNotifications: data.appNotifications ?? [],
 })
 
 export const createBackupEnvelope = async (): Promise<BackupEnvelope> => {
   const data = await loadAppData()
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     backupId: newId(),
     createdAt: nowIso(),
     deviceName: data.settings.deviceName,
@@ -70,7 +88,7 @@ export const serializeBackup = async (encryptPassword?: string): Promise<string>
 export const parseBackup = async (text: string, password?: string): Promise<BackupEnvelope> => {
   const raw = text.includes('"encrypted":true') || text.includes('"encrypted": true') ? await decryptText(text, password ?? '') : text
   const parsed = backupEnvelopeSchema.parse(JSON.parse(raw))
-  const data = parsed.data as unknown as AppData
+  const data = normalizeAppData(parsed.data as unknown as AppData)
   return {
     schemaVersion: parsed.schemaVersion,
     backupId: parsed.backupId,
@@ -109,9 +127,9 @@ export const detectDuplicateIds = (current: AppData, incoming: AppData): string[
 
 export const importBackup = async (text: string, mode: 'replace' | 'merge', password?: string): Promise<{ imported: number; duplicates: number }> => {
   const incoming = await parseBackup(text, password)
-  if (incoming.schemaVersion > 1) throw new Error('El respaldo usa una version de esquema no compatible.')
+  if (incoming.schemaVersion > 2) throw new Error('El respaldo usa una version de esquema no compatible.')
   if (mode === 'replace') {
-    await replaceAllData(incoming.data)
+    await replaceAllData(normalizeAppData(incoming.data))
     return { imported: Object.values(incoming.entityCounts).reduce((total, count) => total + count, 0), duplicates: 0 }
   }
   const current = await loadAppData()
@@ -143,6 +161,12 @@ export const importBackup = async (text: string, mode: 'replace' | 'merge', pass
     dailyCheckIns: [...current.dailyCheckIns, ...incoming.data.dailyCheckIns.filter((item) => !duplicates.has(item.id))],
     moodEnergyLogs: [...current.moodEnergyLogs, ...(incoming.data.moodEnergyLogs ?? []).filter((item) => !duplicates.has(item.id))],
     weightLogs: [...current.weightLogs, ...(incoming.data.weightLogs ?? []).filter((item) => !duplicates.has(item.id))],
+    hydrationLogs: [...current.hydrationLogs, ...(incoming.data.hydrationLogs ?? []).filter((item) => !duplicates.has(item.id))],
+    courses: [...current.courses, ...(incoming.data.courses ?? []).filter((item) => !duplicates.has(item.id))],
+    studyTopics: [...current.studyTopics, ...(incoming.data.studyTopics ?? []).filter((item) => !duplicates.has(item.id))],
+    courseActivities: [...current.courseActivities, ...(incoming.data.courseActivities ?? []).filter((item) => !duplicates.has(item.id))],
+    studySessions: [...current.studySessions, ...(incoming.data.studySessions ?? []).filter((item) => !duplicates.has(item.id))],
+    appNotifications: [...current.appNotifications, ...(incoming.data.appNotifications ?? []).filter((item) => !duplicates.has(item.id))],
   })
   await replaceAllData(merged)
   return { imported: Object.values(incoming.entityCounts).reduce((total, count) => total + count, 0) - duplicates.size, duplicates: duplicates.size }

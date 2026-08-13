@@ -1,8 +1,11 @@
 import Dexie, { type Table } from 'dexie'
 import type {
   AppSettings,
+  AppNotification,
   Budget,
   CareLog,
+  Course,
+  CourseActivity,
   DailyCheckIn,
   Debt,
   DebtPayment,
@@ -11,6 +14,7 @@ import type {
   Fund,
   Habit,
   HabitEntry,
+  HydrationLog,
   MealLog,
   MotivationLink,
   MoodEnergyLog,
@@ -21,6 +25,8 @@ import type {
   RecreationLog,
   SleepLog,
   SocialLog,
+  StudySession,
+  StudyTopic,
   Task,
   TrainingLog,
   WorkSession,
@@ -53,6 +59,12 @@ export class ControlPersonalDatabase extends Dexie {
   dailyCheckIns!: Table<DailyCheckIn, string>
   moodEnergyLogs!: Table<MoodEnergyLog, string>
   weightLogs!: Table<WeightLog, string>
+  hydrationLogs!: Table<HydrationLog, string>
+  courses!: Table<Course, string>
+  studyTopics!: Table<StudyTopic, string>
+  courseActivities!: Table<CourseActivity, string>
+  studySessions!: Table<StudySession, string>
+  appNotifications!: Table<AppNotification, string>
 
   constructor() {
     super('control-personal-db')
@@ -87,6 +99,14 @@ export class ControlPersonalDatabase extends Dexie {
     this.version(3).stores({
       weightLogs: 'id, dateTime, date',
     })
+    this.version(4).stores({
+      hydrationLogs: 'id, dateTime, type',
+      courses: 'id, status, name',
+      studyTopics: 'id, courseId, status',
+      courseActivities: 'id, courseId, dueDate, priority, status',
+      studySessions: 'id, courseId, startedAt, type, activityId',
+      appNotifications: 'id, type, createdAt, readAt, dismissedAt, fingerprint',
+    })
   }
 }
 
@@ -118,4 +138,10 @@ export const allTables = [
   db.dailyCheckIns,
   db.moodEnergyLogs,
   db.weightLogs,
+  db.hydrationLogs,
+  db.courses,
+  db.studyTopics,
+  db.courseActivities,
+  db.studySessions,
+  db.appNotifications,
 ]

@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Clock3,
   Dumbbell,
+  Droplets,
   Heart,
   Lightbulb,
   Moon,
@@ -30,8 +31,9 @@ import { Modal } from '../../components/Modal'
 import { QuickActionModal } from '../../components/QuickActionModal'
 import { useAppStore } from '../../stores/appStore'
 import { averageSleepHours } from '../../services/timeCalculations'
+import { calculateHydrationGuidance } from '../../services/hydrationGuidance'
 import { formatMinutes } from '../../utils/format'
-import { todayIso } from '../../utils/date'
+import { nowIso, todayIso } from '../../utils/date'
 import {
   motivationForLowMood,
   recommendationSeed,
@@ -58,6 +60,9 @@ export function WellbeingPage() {
   )
   const addRecreationLog = useAppStore(
     (state) => state.addRecreationLog,
+  )
+  const addHydrationLog = useAppStore(
+    (state) => state.addHydrationLog,
   )
   const addToast = useAppStore((state) => state.addToast)
   const updateSettings = useAppStore(
@@ -87,6 +92,8 @@ export function WellbeingPage() {
     useState(3)
   const [trainingEnergyAfter, setTrainingEnergyAfter] =
     useState(3)
+  const [hydrationAmount, setHydrationAmount] =
+    useState(250)
 
   if (!data) return null
 
@@ -136,6 +143,36 @@ export function WellbeingPage() {
       (sum, log) => sum + log.durationMinutes,
       0,
     )
+
+  const todayHydrationMl = data.hydrationLogs
+    .filter((log) => log.dateTime.slice(0, 10) === today)
+    .reduce((sum, log) => sum + (log.amountMl ?? 0), 0)
+
+  const todayTrainingMinutes = data.trainingLogs
+    .filter((log) => log.dateTime.slice(0, 10) === today)
+    .reduce((sum, log) => sum + log.durationMinutes, 0)
+
+  const hydrationGuidance = calculateHydrationGuidance(
+    data.settings,
+    { trainingMinutes: todayTrainingMinutes },
+  )
+
+  const registerHydration = async (
+    amountMl: number,
+    notes?: string,
+  ) => {
+    await addHydrationLog({
+      dateTime: nowIso(),
+      amountMl,
+      type: 'water',
+      notes,
+    })
+    addToast({
+      title: 'Agua registrada',
+      detail: `${amountMl} ml agregados al dia.`,
+      tone: 'success',
+    })
+  }
 
   const sleepData = data.sleepLogs
     .toSorted((a, b) => a.date.localeCompare(b.date))
@@ -471,7 +508,66 @@ export function WellbeingPage() {
         </article>
       </div>
 
-
+      <section className="wellbeing-hydration-card">
+        <div className="wellbeing-hydration-card__summary">
+          <Droplets size={20} aria-hidden="true" />
+          <div>
+            <strong>Hidratacion</strong>
+            <span>
+              Hoy llevas {todayHydrationMl} ml
+              {hydrationGuidance.referenceMl
+                ? ` de una referencia de ${hydrationGuidance.referenceMl} ml`
+                : ''}
+            </span>
+          </div>
+        </div>
+        <p>{hydrationGuidance.message}</p>
+        <div className="wellbeing-hydration-actions">
+          <Button
+            variant="secondary"
+            onClick={() =>
+              void registerHydration(
+                data.settings.hydrationGlassMl ?? 250,
+                'Vaso',
+              )
+            }
+          >
+            + vaso
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() =>
+              void registerHydration(
+                data.settings.hydrationBottleMl ?? 600,
+                'Botella',
+              )
+            }
+          >
+            + botella
+          </Button>
+          <label>
+            Cantidad ml
+            <input
+              type="number"
+              min={1}
+              value={hydrationAmount}
+              onChange={(event) =>
+                setHydrationAmount(Number(event.target.value))
+              }
+            />
+          </label>
+          <Button
+            onClick={() =>
+              void registerHydration(
+                Math.max(1, hydrationAmount),
+                'Cantidad manual',
+              )
+            }
+          >
+            Agregar
+          </Button>
+        </div>
+      </section>
 
 
       <section className="wellbeing-collapse">

@@ -6738,6 +6738,284 @@ th { color: var(--muted); font-size: .82rem; }
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 10px;
 }
+
+.notification-menu {
+  position: relative;
+}
+
+.notification-trigger {
+  position: relative;
+}
+
+.notification-trigger > span {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--red);
+  color: white;
+  font-size: .75rem;
+  font-weight: 800;
+}
+
+.notification-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: min(360px, calc(100vw - 28px));
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.notification-popover__header,
+.notification-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notification-popover__header small,
+.notification-card p,
+.notification-card small,
+.notification-empty {
+  color: var(--muted);
+}
+
+.notification-card {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.notification-card.read {
+  opacity: .72;
+}
+
+.notification-card a {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.notification-card button {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.dashboard-daily-evaluation,
+.wellbeing-hydration-card,
+.study-hero,
+.progress-evaluation-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.dashboard-daily-evaluation {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-daily-evaluation span,
+.progress-evaluation-panel span {
+  color: var(--primary);
+  font-weight: 800;
+  font-size: .82rem;
+}
+
+.dashboard-daily-evaluation h3 {
+  font-size: 1.15rem;
+}
+
+.dashboard-daily-evaluation p,
+.progress-evaluation-panel p,
+.study-hero p,
+.wellbeing-hydration-card p {
+  color: var(--muted);
+}
+
+.dashboard-daily-evaluation__action {
+  padding: 12px;
+  border-left: 4px solid var(--primary);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.dashboard-daily-evaluation details {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.dashboard-daily-evaluation summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.wellbeing-hydration-card {
+  display: grid;
+  gap: 12px;
+}
+
+.wellbeing-hydration-card__summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wellbeing-hydration-card__summary svg {
+  color: #0891b2;
+}
+
+.wellbeing-hydration-card__summary div {
+  display: grid;
+  gap: 2px;
+}
+
+.wellbeing-hydration-card__summary span {
+  color: var(--muted);
+}
+
+.wellbeing-hydration-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.study-page {
+  display: grid;
+  gap: 14px;
+}
+
+.study-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+}
+
+.study-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 14px;
+}
+
+.study-course-list,
+.study-list,
+.insight-list,
+.progress-pattern-grid,
+.progress-evaluation-grid,
+.settings-notification-toggles {
+  display: grid;
+  gap: 10px;
+}
+
+.study-course-list {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-top: 12px;
+}
+
+.study-course-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.study-course-list button.active {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.study-course-list button span {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.study-row,
+.insight-card,
+.progress-pattern-grid article,
+.progress-evaluation-grid article {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.study-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.study-row span,
+.insight-card small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.progress-evaluation-grid,
+.progress-pattern-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.settings-notification-toggles {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  margin-top: 14px;
+}
+
+.settings-notification-toggles label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+@media (max-width: 720px) {
+  .study-hero,
+  .study-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .notification-popover {
+    position: fixed;
+    top: 76px;
+    right: 14px;
+  }
+}
 .area-status-card {
   display: grid;
   gap: 10px;

@@ -12,13 +12,17 @@ import {
   initialPrinciples,
 } from '../db/initialData'
 import { applyDebtPayment, applyObligationPayment, obligationStatus } from '../services/financeCalculations'
+import { generateInternalNotifications } from '../services/insights/notificationEngine'
 import { createLinkedTrainingHabitEntry, isTrainingHabitName } from '../services/linkedActivities'
 import { calculateSleepDurationHours, calculateWorkSessionDuration } from '../services/timeCalculations'
 import type {
   AppData,
   AppSettings,
+  AppNotification,
   Budget,
   CareLog,
+  Course,
+  CourseActivity,
   DailyCheckIn,
   Debt,
   DebtPayment,
@@ -27,6 +31,7 @@ import type {
   Fund,
   Habit,
   HabitEntry,
+  HydrationLog,
   MealLog,
   MotivationLink,
   MoodEnergyLog,
@@ -37,6 +42,8 @@ import type {
   RecreationLog,
   SleepLog,
   SocialLog,
+  StudySession,
+  StudyTopic,
   Task,
   TrainingLog,
   WorkSession,
@@ -57,6 +64,7 @@ interface AppStore {
   loading: boolean
   locked: boolean
   activeTimerId?: string
+  activeStudySessionId?: string
   toasts: ToastMessage[]
   load: () => Promise<void>
   completeOnboarding: (settings: Partial<AppSettings>, accounts: FinancialAccount[], debts: Debt[], obligations: Obligation[], enabledHabitIds: string[]) => Promise<void>
@@ -86,6 +94,7 @@ interface AppStore {
   addSleepLog: (log: EntityDraft<SleepLog>) => Promise<void>
   addMealLog: (log: EntityDraft<MealLog>) => Promise<void>
   addTrainingLog: (log: EntityDraft<TrainingLog>) => Promise<void>
+  addHydrationLog: (log: EntityDraft<HydrationLog>) => Promise<void>
   addCareLog: (log: EntityDraft<CareLog>) => Promise<void>
   addSocialLog: (log: EntityDraft<SocialLog>) => Promise<void>
   addAccount: (account: EntityDraft<FinancialAccount>) => Promise<void>
@@ -110,6 +119,22 @@ interface AppStore {
   updateDailyCheckIn: (checkIn: EntityDraft<DailyCheckIn>) => Promise<void>
   addMoodEnergyLog: (log: EntityDraft<MoodEnergyLog>) => Promise<void>
   addWeightLog: (log: EntityDraft<WeightLog>) => Promise<void>
+  addCourse: (course: EntityDraft<Course>) => Promise<void>
+  updateCourse: (course: Course) => Promise<void>
+  addStudyTopic: (topic: EntityDraft<StudyTopic>) => Promise<void>
+  updateStudyTopic: (topic: StudyTopic) => Promise<void>
+  addCourseActivity: (activity: EntityDraft<CourseActivity>) => Promise<void>
+  updateCourseActivity: (activity: CourseActivity) => Promise<void>
+  addStudySession: (session: EntityDraft<StudySession>) => Promise<void>
+  startStudySession: (session: EntityDraft<StudySession>) => Promise<void>
+  finishStudySession: (
+    id: string,
+    update: Pick<StudySession, 'comprehension' | 'difficulty' | 'focusLevel'> &
+      Partial<Pick<StudySession, 'result' | 'understood' | 'struggledWith' | 'nextReview' | 'notes'>>,
+  ) => Promise<void>
+  addAppNotification: (notification: EntityDraft<AppNotification>) => Promise<void>
+  markNotificationRead: (id: string) => Promise<void>
+  dismissNotification: (id: string) => Promise<void>
   resetAll: () => Promise<void>
   replaceData: (data: AppData) => Promise<void>
 }
@@ -140,6 +165,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   data: null,
   loading: true,
   locked: false,
+  activeStudySessionId: undefined,
   toasts: [],
   load: async () => {
     await seedIfEmpty()
@@ -148,6 +174,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       typeof navigator !== 'undefined' && navigator.storage && 'persist' in navigator.storage ? await navigator.storage.persist() : false
     if (persistentStorage !== data.settings.persistentStorage) {
       await db.settings.put({ ...data.settings, persistentStorage, updatedAt: nowIso() })
+    }
+    const notificationDrafts = generateInternalNotifications(data)
+    if (notificationDrafts.length > 0) {
+      await db.appNotifications.bulkAdd(notificationDrafts.map((notification) => withBase<AppNotification>(notification)))
     }
     set({ data: await loadAppData(), loading: false, locked: data.settings.lockEnabled })
   },
@@ -307,6 +337,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }))
     )
       await refresh(set)
+  },
+  addHydrationLog: async (log) => {
+    const record = withBase<HydrationLog>(log)
+    await db.hydrationLogs.add(record)
+    if (!updateLoadedData(set, (data) => ({ ...data, hydrationLogs: [...data.hydrationLogs, record] }))) await refresh(set)
   },
   addCareLog: async (log) => {
     const record = withBase<CareLog>(log)
@@ -481,6 +516,78 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })
     if (!updateLoadedData(set, (data) => ({ ...data, settings: { ...data.settings, weightLb: record.weightLb, weightKg: undefined, updatedAt: nowIso() }, weightLogs: [...data.weightLogs, record] }))) await refresh(set)
   },
+  addCourse: async (course) => {
+    const record = withBase<Course>(course)
+    await db.courses.add(record)
+    if (!updateLoadedData(set, (data) => ({ ...data, courses: [...data.courses, record] }))) await refresh(set)
+  },
+  updateCourse: async (course) => {
+    const record = { ...course, updatedAt: nowIso() }
+    await db.courses.put(record)
+    if (!updateLoadedData(set, (data) => ({ ...data, courses: data.courses.map((item) => (item.id === record.id ? record : item)) }))) await refresh(set)
+  },
+  addStudyTopic: async (topic) => {
+    const record = withBase<StudyTopic>(topic)
+    await db.studyTopics.add(record)
+    if (!updateLoadedData(set, (data) => ({ ...data, studyTopics: [...data.studyTopics, record] }))) await refresh(set)
+  },
+  updateStudyTopic: async (topic) => {
+    const record = { ...topic, updatedAt: nowIso() }
+    await db.studyTopics.put(record)
+    if (!updateLoadedData(set, (data) => ({ ...data, studyTopics: data.studyTopics.map((item) => (item.id === record.id ? record : item)) }))) await refresh(set)
+  },
+  addCourseActivity: async (activity) => {
+    const record = withBase<CourseActivity>(activity)
+    await db.courseActivities.add(record)
+    if (!updateLoadedData(set, (data) => ({ ...data, courseActivities: [...data.courseActivities, record] }))) await refresh(set)
+  },
+  updateCourseActivity: async (activity) => {
+    const record = { ...activity, updatedAt: nowIso() }
+    await db.courseActivities.put(record)
+    if (!updateLoadedData(set, (data) => ({ ...data, courseActivities: data.courseActivities.map((item) => (item.id === record.id ? record : item)) }))) await refresh(set)
+  },
+  addStudySession: async (session) => {
+    const record = withBase<StudySession>(session)
+    await db.studySessions.add(record)
+    if (!updateLoadedData(set, (data) => ({ ...data, studySessions: [...data.studySessions, record] }))) await refresh(set)
+  },
+  startStudySession: async (session) => {
+    const record = withBase<StudySession>({ ...session, startedAt: nowIso(), durationMinutes: 0, breakMinutes: 0, effectiveMinutes: 0 })
+    await db.studySessions.add(record)
+    set({ activeStudySessionId: record.id })
+    if (!updateLoadedData(set, (data) => ({ ...data, studySessions: [...data.studySessions, record] }))) await refresh(set)
+  },
+  finishStudySession: async (id, update) => {
+    const session = await db.studySessions.get(id)
+    if (!session) return
+    const endedAt = nowIso()
+    const duration = calculateWorkSessionDuration(session.startedAt, endedAt, session.breakMinutes)
+    const record = { ...session, ...duration, ...update, endedAt, updatedAt: nowIso() }
+    await db.studySessions.put(record)
+    set({ activeStudySessionId: undefined })
+    if (!updateLoadedData(set, (data) => ({ ...data, studySessions: data.studySessions.map((item) => (item.id === record.id ? record : item)) }))) await refresh(set)
+  },
+  addAppNotification: async (notification) => {
+    const existing = await db.appNotifications.where('fingerprint').equals(notification.fingerprint).first()
+    if (existing && !existing.dismissedAt) return
+    const record = withBase<AppNotification>(notification)
+    await db.appNotifications.add(record)
+    if (!updateLoadedData(set, (data) => ({ ...data, appNotifications: [...data.appNotifications, record] }))) await refresh(set)
+  },
+  markNotificationRead: async (id) => {
+    const notification = await db.appNotifications.get(id)
+    if (!notification) return
+    const record = { ...notification, readAt: nowIso(), updatedAt: nowIso() }
+    await db.appNotifications.put(record)
+    if (!updateLoadedData(set, (data) => ({ ...data, appNotifications: data.appNotifications.map((item) => (item.id === record.id ? record : item)) }))) await refresh(set)
+  },
+  dismissNotification: async (id) => {
+    const notification = await db.appNotifications.get(id)
+    if (!notification) return
+    const record = { ...notification, dismissedAt: nowIso(), updatedAt: nowIso() }
+    await db.appNotifications.put(record)
+    if (!updateLoadedData(set, (data) => ({ ...data, appNotifications: data.appNotifications.map((item) => (item.id === record.id ? record : item)) }))) await refresh(set)
+  },
   resetAll: async () => {
     const settings = createDefaultSettings()
     await replaceAllData({
@@ -509,6 +616,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       dailyCheckIns: [],
       moodEnergyLogs: [],
       weightLogs: [],
+      hydrationLogs: [],
+      courses: [],
+      studyTopics: [],
+      courseActivities: [],
+      studySessions: [],
+      appNotifications: [],
     })
     await refresh(set)
   },

@@ -21,6 +21,7 @@ import {
   // dayColor,
 } from '../../services/habitScoring'
 import { dailyEffectiveWorkMinutes } from '../../services/timeCalculations'
+import { generateDailyEvaluation } from '../../services/insights/evaluationEngine'
 import {
   formatCurrency,
   formatMinutes,
@@ -90,6 +91,11 @@ export function DashboardPage() {
     [data, today],
   )
 
+  const dailyEvaluation = useMemo(
+    () => (data ? generateDailyEvaluation(data) : null),
+    [data],
+  )
+
   /*
    * Este valor puede calcularse antes del retorno porque
    * usa encadenamiento opcional.
@@ -107,7 +113,7 @@ export function DashboardPage() {
     setDraftMood(checkIn?.mood ?? 3)
   }, [checkIn?.energy, checkIn?.mood])
 
-  if (!data || !summary || !habitScore) return null
+  if (!data || !summary || !habitScore || !dailyEvaluation) return null
 
   const priorities = data.priorities
     .filter(
@@ -373,6 +379,28 @@ export function DashboardPage() {
       </section>
 
       {/* Frase del día en una sola franja */}
+
+      <section className="dashboard-daily-evaluation">
+        <div>
+          <span>Tu situacion hoy</span>
+          <h3>{dailyEvaluation.title}</h3>
+          <p>{dailyEvaluation.message}</p>
+        </div>
+
+        <div className="dashboard-daily-evaluation__action">
+          <strong>Siguiente paso</strong>
+          <p>{dailyEvaluation.mainAction}</p>
+        </div>
+
+        <details>
+          <summary>Por que</summary>
+          <ul>
+            {dailyEvaluation.evidence.slice(0, 4).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </details>
+      </section>
 
       {principle ? (
         <article className="dashboard-quote-strip">

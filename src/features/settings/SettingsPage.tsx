@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import {
+  Bell,
   ChevronDown,
   Database,
   Download,
+  Droplets,
   HardDrive,
   Lock,
   RefreshCw,
@@ -26,6 +28,7 @@ import { hashPin } from '../../services/cryptoService'
 import { todayIso } from '../../utils/date'
 
 type SettingsSection =
+  | 'notifications'
   | 'security'
   | 'backup'
   | 'install'
@@ -544,6 +547,156 @@ export function SettingsPage() {
           antes de borrar datos del navegador o
           cambiar de equipo.
         </p>
+      </section>
+
+      <section className="settings-collapse">
+        <button
+          type="button"
+          className="settings-collapse__summary"
+          aria-expanded={openSection === 'notifications'}
+          onClick={() => toggleSection('notifications')}
+        >
+          <div className="settings-collapse__identity">
+            <span className="settings-collapse__icon tone-green">
+              <Bell size={17} aria-hidden="true" />
+            </span>
+
+            <div>
+              <strong>Notificaciones y agua</strong>
+              <span>Recordatorios prudentes y equivalencias personales</span>
+            </div>
+          </div>
+
+          <ChevronDown
+            size={18}
+            className={openSection === 'notifications' ? 'is-open' : undefined}
+            aria-hidden="true"
+          />
+        </button>
+
+        {openSection === 'notifications' ? (
+          <div className="settings-collapse__body">
+            <div className="settings-form-grid">
+              <label>
+                <Droplets size={16} aria-hidden="true" />
+                Vaso
+                <div className="settings-number-suffix">
+                  <input
+                    type="number"
+                    min="1"
+                    value={data.settings.hydrationGlassMl ?? 250}
+                    onChange={(event) =>
+                      updateSettings({
+                        hydrationGlassMl: Number(event.target.value),
+                      })
+                    }
+                  />
+                  <span>ml</span>
+                </div>
+              </label>
+
+              <label>
+                <Droplets size={16} aria-hidden="true" />
+                Botella
+                <div className="settings-number-suffix">
+                  <input
+                    type="number"
+                    min="1"
+                    value={data.settings.hydrationBottleMl ?? 600}
+                    onChange={(event) =>
+                      updateSettings({
+                        hydrationBottleMl: Number(event.target.value),
+                      })
+                    }
+                  />
+                  <span>ml</span>
+                </div>
+              </label>
+
+              <label>
+                Movimiento
+                <div className="settings-number-suffix">
+                  <input
+                    type="number"
+                    min="10"
+                    value={data.settings.movementReminderMinutes ?? 55}
+                    onChange={(event) =>
+                      updateSettings({
+                        movementReminderMinutes: Number(event.target.value),
+                      })
+                    }
+                  />
+                  <span>min</span>
+                </div>
+              </label>
+
+              <label>
+                Silencio inicia
+                <input
+                  type="time"
+                  value={data.settings.notificationQuietStart ?? '22:30'}
+                  onChange={(event) =>
+                    updateSettings({
+                      notificationQuietStart: event.target.value,
+                    })
+                  }
+                />
+              </label>
+
+              <label>
+                Silencio termina
+                <input
+                  type="time"
+                  value={data.settings.notificationQuietEnd ?? '07:00'}
+                  onChange={(event) =>
+                    updateSettings({
+                      notificationQuietEnd: event.target.value,
+                    })
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="settings-notification-toggles">
+              {[
+                ['general', 'Generales'],
+                ['habits', 'Habitos'],
+                ['movement', 'Movimiento'],
+                ['hydration', 'Agua'],
+                ['meals', 'Comidas'],
+                ['work', 'Trabajo'],
+                ['study', 'Estudio'],
+                ['finance', 'Finanzas'],
+                ['sleep', 'Sueno'],
+              ].map(([key, label]) => (
+                <label key={key}>
+                  <input
+                    type="checkbox"
+                    checked={data.settings.notificationPreferences?.[key as keyof NonNullable<typeof data.settings.notificationPreferences>] ?? true}
+                    onChange={(event) =>
+                      updateSettings({
+                        notificationPreferences: {
+                          general: true,
+                          habits: true,
+                          movement: true,
+                          hydration: true,
+                          meals: true,
+                          work: true,
+                          study: true,
+                          finance: true,
+                          sleep: true,
+                          ...data.settings.notificationPreferences,
+                          [key]: event.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="settings-collapse">

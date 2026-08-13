@@ -12,11 +12,15 @@ import {
 } from './financeCalculations'
 import { calculateHabitDayScore, dayColor, statusFromValue } from './habitScoring'
 import { calculateSleepDurationHours, calculateWorkSessionDuration } from './timeCalculations'
-import { detectDuplicateIds } from './backupService'
+import { detectDuplicateIds, normalizeAppData } from './backupService'
 import { bodyProfileSummary, getProfileSummary } from './personalInsights'
 import { createDefaultSettings } from '../db/initialData'
 import { createLinkedTrainingHabitEntry, isTrainingHabitName } from './linkedActivities'
 import { calculateHydrationGuidance } from './hydrationGuidance'
+import { confidenceFromSample, numericBaseline } from './insights/baselineEngine'
+import { classifyMealText } from './insights/foodInsightEngine'
+import { buildActivityProfile } from './insights/activityEngine'
+import { studyInsights } from './insights/studyInsightEngine'
 
 const stamp = '2026-08-03T12:00:00.000Z'
 
@@ -214,20 +218,102 @@ describe('habit and time calculations', () => {
   })
 })
 
+describe('clarity engines', () => {
+  it('calculates baselines and confidence without overclaiming small samples', () => {
+    const baseline = numericBaseline([10, 12, 11, 20, 22, 24])
+
+    expect(baseline.median).toBe(16)
+    expect(baseline.trend).toBe('increasing')
+    expect(confidenceFromSample(4)).toBe('insufficient')
+    expect(confidenceFromSample(22)).toBe('medium')
+  })
+
+  it('classifies food text conservatively', () => {
+    const chicken = classifyMealText('Pollo')
+    const fullMeal = classifyMealText('2 huevos con frijoles, fresas y fresco')
+
+    expect(chicken.proteinSource).toBe(true)
+    expect(chicken.confidence).toBe('low')
+    expect(chicken.ultraProcessedLikely).toBeUndefined()
+    expect(fullMeal.legume).toBe(true)
+    expect(fullMeal.fruit).toBe(true)
+    expect(fullMeal.sugaryDrink).toBe(true)
+  })
+
+  it('does not recommend aggressive activity for very low registered activity', () => {
+    const profile = buildActivityProfile({
+      settings: { ...createDefaultSettings(), sleepGoalHours: 7 },
+      trainingLogs: [],
+      sleepLogs: [],
+    })
+
+    expect(profile.last7DaysMinutes).toBe(0)
+    expect(profile.readiness).toBe('maintain')
+  })
+
+  it('creates study insight without inventing academic conclusions', () => {
+    const insights = studyInsights({
+      courses: [],
+      courseActivities: [],
+      studySessions: [],
+      studyTopics: [],
+    })
+
+    expect(insights[0].confidence).toBe('insufficient')
+    expect(insights[0].title).toContain('cursos activos')
+  })
+})
+
 describe('backup helpers', () => {
   it('detects duplicate UUIDs before merging backup data', () => {
     const baseData = {
       settings: { id: 'settings-1' },
       habits: [{ id: 'habit-1' }],
       movements: [{ id: 'movement-1' }],
-    } as AppData
+    } as unknown as AppData
     const incomingData = {
       settings: { id: 'settings-2' },
       habits: [{ id: 'habit-1' }, { id: 'habit-2' }],
       movements: [{ id: 'movement-3' }],
-    } as AppData
+    } as unknown as AppData
 
     expect(detectDuplicateIds(baseData, incomingData)).toEqual(['habit-1'])
+  })
+
+  it('normalizes old backups without the new collections', () => {
+    const oldData = {
+      settings: createDefaultSettings(),
+      habits: [],
+      habitEntries: [],
+      priorities: [],
+      projects: [],
+      tasks: [],
+      workSessions: [],
+      recreationLogs: [],
+      sleepLogs: [],
+      mealLogs: [],
+      trainingLogs: [],
+      careLogs: [],
+      socialLogs: [],
+      accounts: [],
+      movements: [],
+      budgets: [],
+      obligations: [],
+      debts: [],
+      debtPayments: [],
+      funds: [],
+      principles: [],
+      motivationLinks: [],
+      dailyCheckIns: [],
+      moodEnergyLogs: [],
+      weightLogs: [],
+    } as unknown as AppData
+
+    const normalized = normalizeAppData(oldData)
+
+    expect(normalized.courses).toEqual([])
+    expect(normalized.hydrationLogs).toEqual([])
+    expect(normalized.appNotifications).toEqual([])
   })
 })
 

@@ -11,6 +11,7 @@ import { HabitsPage } from './features/habits/HabitsPage'
 import { MotivationPage } from './features/motivation/MotivationPage'
 import { ProgressPage } from './features/progress/ProgressPage'
 import { SettingsPage } from './features/settings/SettingsPage'
+import { StudyPage } from './features/study/StudyPage'
 import { WellbeingPage } from './features/wellbeing/WellbeingPage'
 import { WorkPage } from './features/work/WorkPage'
 import { useInactivityLock } from './hooks/useInactivityLock'
@@ -57,6 +58,7 @@ function App() {
             <Route index element={<DashboardPage />} />
             <Route path="habitos" element={<HabitsPage />} />
             <Route path="trabajo" element={<WorkPage />} />
+            <Route path="estudio" element={<StudyPage />} />
             <Route path="bienestar" element={<WellbeingPage />} />
             <Route path="finanzas" element={<FinancesPage />} />
             <Route path="progreso" element={<ProgressPage />} />

@@ -35,6 +35,12 @@ export interface AppSettings extends BaseEntity {
   inactivityMinutes: number
   habitScoreWeights: Record<HabitEntryStatus, number | null>
   demoMode: boolean
+  notificationPreferences?: NotificationPreferences
+  hydrationGlassMl?: number
+  hydrationBottleMl?: number
+  movementReminderMinutes?: number
+  notificationQuietStart?: string
+  notificationQuietEnd?: string
 }
 
 export interface Habit extends BaseEntity {
@@ -352,6 +358,121 @@ export interface WeightLog extends BaseEntity {
   notes?: string
 }
 
+export interface HydrationLog extends BaseEntity {
+  dateTime: string
+  amountMl?: number
+  type: 'water' | 'other'
+  notes?: string
+}
+
+export type CourseStatus = 'active' | 'completed' | 'archived'
+
+export interface Course extends BaseEntity {
+  name: string
+  code?: string
+  description?: string
+  term?: string
+  institution?: string
+  professor?: string
+  language?: string
+  targetWeeklyMinutes?: number
+  startDate?: string
+  endDate?: string
+  color: string
+  status: CourseStatus
+}
+
+export type StudyTopicStatus = 'not-started' | 'learning' | 'reviewing' | 'mastered'
+
+export interface StudyTopic extends BaseEntity {
+  courseId: string
+  name: string
+  description?: string
+  importance: number
+  currentMastery: number
+  difficulty: number
+  status: StudyTopicStatus
+}
+
+export type CourseActivityType = 'assignment' | 'exam' | 'quiz' | 'project' | 'reading' | 'presentation' | 'practice' | 'other'
+export type CourseActivityPriority = 'low' | 'medium' | 'high' | 'critical'
+export type CourseActivityStatus = 'pending' | 'in-progress' | 'completed'
+
+export interface CourseActivity extends BaseEntity {
+  courseId: string
+  topicIds: string[]
+  title: string
+  type: CourseActivityType
+  dueDate?: string
+  estimatedMinutes?: number
+  actualMinutes?: number
+  grade?: number
+  maxGrade?: number
+  weightPercent?: number
+  priority: CourseActivityPriority
+  status: CourseActivityStatus
+}
+
+export type StudySessionType = 'class' | 'reading' | 'practice' | 'review' | 'assignment' | 'project' | 'language' | 'other'
+export type LanguageSkill = 'reading' | 'listening' | 'writing' | 'speaking' | 'vocabulary' | 'grammar'
+
+export interface StudySession extends BaseEntity {
+  courseId: string
+  topicIds: string[]
+  activityId?: string
+  startedAt: string
+  endedAt?: string
+  durationMinutes: number
+  breakMinutes: number
+  effectiveMinutes: number
+  type: StudySessionType
+  focusLevel: number
+  difficulty: number
+  comprehension: number
+  result?: string
+  understood?: string
+  struggledWith?: string
+  nextReview?: string
+  notes?: string
+  languageSkill?: LanguageSkill
+  languageDifficulty?: number
+}
+
+export type AppNotificationType =
+  | 'Habitos'
+  | 'Movimiento'
+  | 'Hidratacion'
+  | 'Comida'
+  | 'Trabajo'
+  | 'Estudio'
+  | 'Finanzas'
+  | 'Sueno'
+  | 'Evaluaciones'
+
+export interface AppNotification extends BaseEntity {
+  type: AppNotificationType
+  title: string
+  message: string
+  readAt?: string
+  dismissedAt?: string
+  actionRoute?: string
+  priority: 'low' | 'medium' | 'high'
+  fingerprint: string
+}
+
+export type NotificationGroupKey =
+  | 'general'
+  | 'habits'
+  | 'movement'
+  | 'hydration'
+  | 'meals'
+  | 'work'
+  | 'study'
+  | 'finance'
+  | 'sleep'
+
+export type NotificationPreferences = Record<NotificationGroupKey, boolean>
+
 export interface DemoRecord extends BaseEntity {
   enabled: boolean
 }
@@ -382,6 +503,12 @@ export type BackupEntityName =
   | 'dailyCheckIns'
   | 'moodEnergyLogs'
   | 'weightLogs'
+  | 'hydrationLogs'
+  | 'courses'
+  | 'studyTopics'
+  | 'courseActivities'
+  | 'studySessions'
+  | 'appNotifications'
 
 export interface AppData {
   settings: AppSettings
@@ -409,6 +536,12 @@ export interface AppData {
   dailyCheckIns: DailyCheckIn[]
   moodEnergyLogs: MoodEnergyLog[]
   weightLogs: WeightLog[]
+  hydrationLogs: HydrationLog[]
+  courses: Course[]
+  studyTopics: StudyTopic[]
+  courseActivities: CourseActivity[]
+  studySessions: StudySession[]
+  appNotifications: AppNotification[]
 }
 
 export type JsonPrimitive = string | number | boolean | null

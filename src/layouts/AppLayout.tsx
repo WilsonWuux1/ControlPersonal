@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Menu, Plus, RefreshCw, X } from 'lucide-react'
+import { Bell, Check, Menu, Plus, RefreshCw, X } from 'lucide-react'
 import { useState } from 'react'
 import { navItems } from '../routes/navigation'
 import { Button } from '../components/Button'
@@ -11,10 +11,19 @@ import { daysSince } from '../utils/date'
 export function AppLayout() {
   const [quickOpen, setQuickOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const online = useOnlineStatus()
   const location = useLocation()
   const settings = useAppStore((state) => state.data?.settings)
+  const notifications = useAppStore((state) => state.data?.appNotifications ?? [])
+  const markNotificationRead = useAppStore((state) => state.markNotificationRead)
+  const dismissNotification = useAppStore((state) => state.dismissNotification)
   const backupAge = daysSince(settings?.lastBackupAt)
+  const activeNotifications = notifications
+    .filter((notification) => !notification.dismissedAt)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, 8)
+  const unreadCount = activeNotifications.filter((notification) => !notification.readAt).length
 
   return (
     <div className="shell">
@@ -51,6 +60,45 @@ export function AppLayout() {
                 Respaldo pendiente
               </span>
             ) : null}
+            <div className="notification-menu">
+              <button
+                type="button"
+                className="icon-button notification-trigger"
+                aria-label="Notificaciones"
+                onClick={() => setNotificationsOpen((open) => !open)}
+              >
+                <Bell size={20} />
+                {unreadCount > 0 ? <span>{unreadCount}</span> : null}
+              </button>
+              {notificationsOpen ? (
+                <div className="notification-popover">
+                  <div className="notification-popover__header">
+                    <strong>Notificaciones</strong>
+                    <small>{unreadCount} sin leer</small>
+                  </div>
+                  {activeNotifications.length > 0 ? (
+                    activeNotifications.map((notification) => (
+                      <article key={notification.id} className={notification.readAt ? 'notification-card read' : 'notification-card'}>
+                        <div>
+                          <strong>{notification.title}</strong>
+                          <p>{notification.message}</p>
+                          {notification.actionRoute ? (
+                            <NavLink to={notification.actionRoute} onClick={() => void markNotificationRead(notification.id)}>
+                              Ver ahora
+                            </NavLink>
+                          ) : null}
+                        </div>
+                        <button type="button" aria-label="Descartar" onClick={() => void dismissNotification(notification.id)}>
+                          <Check size={16} />
+                        </button>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="notification-empty">Sin avisos pendientes.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
             <Button aria-label="Nuevo" onClick={() => setQuickOpen(true)} icon={<Plus size={18} />}>
               Nuevo
             </Button>
