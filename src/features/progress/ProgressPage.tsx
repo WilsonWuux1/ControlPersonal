@@ -5,7 +5,9 @@ import {
   CalendarDays,
   ChevronDown,
   Coins,
+  Droplets,
   Dumbbell,
+  GraduationCap,
   Heart,
   Moon,
   Printer,
@@ -26,6 +28,7 @@ import { generateDailyEvaluation } from '../../services/insights/evaluationEngin
 import { crossAreaPatterns } from '../../services/insights/crossAreaPatternEngine'
 import { financeInsights } from '../../services/insights/financeInsightEngine'
 import { studyInsights } from '../../services/insights/studyInsightEngine'
+import { calculateHydrationGuidance } from '../../services/hydrationGuidance'
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, Math.round(value)))
 const habitLineColors = ['#16a34a', '#2563eb', '#db2777', '#9333ea', '#e11d48', '#0f766e', '#0284c7']
@@ -346,6 +349,8 @@ const selectedPeriodStyle = {
   const filteredMovements = data.movements.filter((movement) => inRange(dateFromIso(movement.dateTime)))
   const filteredDailyCheckIns = data.dailyCheckIns.filter((item) => inRange(item.date))
   const filteredMoodEnergyLogs = data.moodEnergyLogs.filter((item) => inRange(item.date))
+  const filteredHydrationLogs = data.hydrationLogs.filter((log) => inRange(dateFromIso(log.dateTime)))
+  const filteredStudySessions = data.studySessions.filter((session) => inRange(dateFromIso(session.startedAt)))
   const filteredWeightLogs = data.weightLogs.filter((log) => inRange(log.date)).toSorted((a, b) => a.dateTime.localeCompare(b.dateTime))
 
   const finance = calculateFinancialSummary(data.accounts, data.movements, data.funds, data.debts, data.obligations)
@@ -373,6 +378,12 @@ const selectedPeriodStyle = {
   const obligationPaid = filteredMovements.filter((movement) => movement.type === 'Pago de obligacion').reduce((sum, movement) => sum + movement.amount, 0)
   const averageMood = average([...filteredDailyCheckIns.map((item) => item.mood), ...filteredMoodEnergyLogs.map((item) => item.mood)])
   const averageEnergy = average([...filteredDailyCheckIns.map((item) => item.energy), ...filteredMoodEnergyLogs.map((item) => item.energy)])
+  const hydrationMl = sumNumbers(filteredHydrationLogs.map((log) => Number(log.amountMl) || 0))
+  const studyMinutes = sumNumbers(filteredStudySessions.map((session) => Number(session.effectiveMinutes) || 0))
+  const finishedStudySessions = filteredStudySessions.filter((session) => session.endedAt).length
+  const activeCourses = data.courses.filter((course) => course.status === 'active')
+  const averageStudyFocus = average(filteredStudySessions.map((session) => Number(session.focusLevel)).filter((value) => value > 0))
+  const averageStudyComprehension = average(filteredStudySessions.map((session) => Number(session.comprehension)).filter((value) => value > 0))
 
   const trackedHabits = trackedHabitNames
     .map((name) => data.habits.find((habit) => habit.name === name))
@@ -437,12 +448,61 @@ const selectedPeriodStyle = {
   }),
   peso: Number(log.weightLb),
 }))
-
   const trainingMinutes = sumNumbers(
     filteredTrainingLogs.map(
       (log) => Number(log.durationMinutes) || 0,
     ),
   )
+  const hydrationTrendData = periodDates.map((date) => {
+    const logs = filteredHydrationLogs.filter((log) => dateFromIso(log.dateTime) === date)
+    const trainingMinutesForDate = sumNumbers(
+      filteredTrainingLogs
+        .filter((log) => dateFromIso(log.dateTime) === date)
+        .map((log) => Number(log.durationMinutes) || 0),
+    )
+    const guidance = calculateHydrationGuidance(data.settings, { trainingMinutes: trainingMinutesForDate })
+    const totalMl = sumNumbers(logs.map((log) => Number(log.amountMl) || 0))
+
+    return {
+      fecha: shortDate(date),
+      ml: totalMl,
+      referencia: guidance.status === 'reference' ? guidance.referenceMl ?? 0 : null,
+      vasos: Math.round(totalMl / 250),
+    }
+  })
+  const hydrationGuidance = calculateHydrationGuidance(data.settings, { trainingMinutes })
+  const hydrationReferenceMl = hydrationGuidance.status === 'reference' ? hydrationGuidance.referenceMl ?? 0 : 0
+  const hydrationPercent = hydrationReferenceMl > 0 ? clampPercent((hydrationMl / Math.max(hydrationReferenceMl * Math.max(1, analysisDates.length), 1)) * 100) : 0
+  const studyTrendData = periodDates.map((date) => {
+    const sessions = filteredStudySessions.filter((session) => dateFromIso(session.startedAt) === date)
+
+    return {
+      fecha: shortDate(date),
+      minutos: sumNumbers(sessions.map((session) => Number(session.effectiveMinutes) || 0)),
+      sesiones: sessions.length,
+      enfoque: sessions.length
+        ? average(sessions.map((session) => Number(session.focusLevel)).filter((value) => value > 0))
+        : null,
+      comprension: sessions.length
+        ? average(sessions.map((session) => Number(session.comprehension)).filter((value) => value > 0))
+        : null,
+    }
+  })
+  const courseStudyData = data.courses
+    .map((course) => {
+      const sessions = filteredStudySessions.filter((session) => session.courseId === course.id)
+      const minutes = sumNumbers(sessions.map((session) => Number(session.effectiveMinutes) || 0))
+      const pendingActivities = data.courseActivities.filter((activity) => activity.courseId === course.id && activity.status !== 'completed').length
+
+      return {
+        curso: course.name,
+        etiqueta: course.name.length > 14 ? `${course.name.slice(0, 13)}...` : course.name,
+        minutos: minutes,
+        sesiones: sessions.length,
+        pendientes: pendingActivities,
+      }
+    })
+    .filter((course) => course.minutos > 0 || course.sesiones > 0 || course.pendientes > 0)
 
   const averageTrainingIntensity = average(
     filteredTrainingLogs
@@ -583,6 +643,24 @@ const selectedPeriodStyle = {
       action: sleepPercent < 80 ? 'Priorizar sueno' : 'Mantener rutina',
     },
     {
+      title: 'Hidratacion',
+      icon: <Droplets size={18} />,
+      score: hydrationPercent,
+      tone: hydrationPercent >= 80 ? 'good' : hydrationPercent >= 45 ? 'warn' : 'quiet',
+      value: `${hydrationMl} ml`,
+      detail: hydrationReferenceMl > 0 ? `Referencia ${hydrationReferenceMl} ml/dia` : 'Perfil incompleto',
+      action: hydrationPercent >= 80 ? 'Buen registro' : 'Registrar agua',
+    },
+    {
+      title: 'Estudio',
+      icon: <GraduationCap size={18} />,
+      score: clampPercent((studyMinutes / Math.max(1, activeCourses.length * 240)) * 100),
+      tone: studyMinutes > 0 ? 'good' : activeCourses.length > 0 ? 'warn' : 'quiet',
+      value: formatMinutes(studyMinutes),
+      detail: `${finishedStudySessions} sesiones, ${activeCourses.length} cursos activos`,
+      action: averageStudyComprehension >= 4 ? 'Buen dominio' : 'Planear sesion',
+    },
+    {
       title: 'Recreacion',
       icon: <Heart size={18} />,
       score: recreationPercent,
@@ -635,6 +713,16 @@ const selectedPeriodStyle = {
       sleep > 0
         ? `Tu sueno promedio fue ${sleep} h frente a una meta de ${data.settings.sleepGoalHours} h. ${mealPercent >= 70 ? 'La alimentacion planificada va bien.' : 'La alimentacion necesita mas registros planificados para encontrar un patron claro.'} Animo promedio ${averageMood || 'sin datos'} y energia promedio ${averageEnergy || 'sin datos'}.`
         : `No hay sueno registrado en este rango. Alimentacion planificada ${mealPercent}% y entrenamientos ${workouts}.`,
+    hydration:
+      hydrationGuidance.status === 'reference'
+        ? `Registraste ${hydrationMl} ml de agua en el periodo. Tu referencia diaria actual es ${hydrationReferenceMl} ml, calculada desde tu perfil y ajustada por entrenamiento registrado.`
+        : hydrationGuidance.message,
+    study:
+      studyMinutes > 0
+        ? `Registraste ${formatMinutes(studyMinutes)} de estudio en ${filteredStudySessions.length} sesiones. Comprension media ${averageStudyComprehension || 'sin datos'}/5 y enfoque medio ${averageStudyFocus || 'sin datos'}/5. Hay ${activeCourses.length} cursos activos para organizar continuidad.`
+        : activeCourses.length > 0
+          ? `Tienes ${activeCourses.length} cursos activos, pero no hay sesiones de estudio registradas en este periodo. Una sesion corta ya daria base para comparar enfoque y comprension.`
+          : 'No hay cursos activos ni sesiones de estudio en este periodo.',
   }
   const printableReport: PrintableReport = {
     userName: data.settings.userName || 'Perfil personal',
@@ -645,6 +733,8 @@ const selectedPeriodStyle = {
       { label: 'Trabajo efectivo', value: formatMinutes(workMinutes), detail: `${finishedWorkSessions} sesiones finalizadas` },
       { label: 'Sueno promedio', value: `${sleep} h`, detail: `Meta personal ${data.settings.sleepGoalHours} h` },
       { label: 'Animo promedio', value: averageMood ? `${averageMood}/5` : 'Sin datos', detail: `Energia ${averageEnergy ? `${averageEnergy}/5` : 'sin datos'}` },
+      { label: 'Hidratacion', value: `${hydrationMl} ml`, detail: hydrationReferenceMl > 0 ? `Referencia ${hydrationReferenceMl} ml/dia` : 'Perfil incompleto' },
+      { label: 'Estudio', value: formatMinutes(studyMinutes), detail: `${filteredStudySessions.length} sesiones, ${activeCourses.length} cursos activos` },
       { label: 'Balance periodo', value: formatSignedCurrency(periodFinance.netFlow, data.settings.currency), detail: `Ingresos ${formatCurrency(periodFinance.income, data.settings.currency)}` },
       { label: 'Dinero libre actual', value: formatCurrency(finance.freeMoney, data.settings.currency), detail: `Deuda ${formatCurrency(finance.debtPending, data.settings.currency)}` },
     ],
@@ -655,6 +745,8 @@ const selectedPeriodStyle = {
       { title: 'Trabajo', body: report.work },
       { title: 'Finanzas', body: report.finances },
       { title: 'Sueno, animo y alimentacion', body: report.wellbeing },
+      { title: 'Hidratacion', body: report.hydration },
+      { title: 'Estudio', body: report.study },
     ],
   }
 
@@ -1001,6 +1093,277 @@ const selectedPeriodStyle = {
               </footer>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="progress-chart-section">
+        <div className="progress-analysis-section-heading progress-chart-section__heading">
+          <div>
+            <span>Aprendizaje y cuidado diario</span>
+            <h2>Hidratacion y estudio</h2>
+          </div>
+        </div>
+
+        <div className="progress-chart-grid">
+          <ChartPanel
+            title="Hidratacion diaria"
+            subtitle={
+              hydrationGuidance.status === 'reference'
+                ? `${hydrationMl} ml registrados / referencia ${hydrationReferenceMl} ml/dia`
+                : hydrationGuidance.message
+            }
+            className="progress-chart-wide"
+            height={245}
+          >
+            <ComposedChart
+              data={hydrationTrendData}
+              margin={{
+                top: 8,
+                right: 8,
+                left: -10,
+                bottom: 0,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+
+              <XAxis
+                dataKey="fecha"
+                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                yAxisId="ml"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                yAxisId="vasos"
+                orientation="right"
+                tick={{ fontSize: 10 }}
+                width={30}
+              />
+
+              <Tooltip
+                formatter={(value, name) => [
+                  String(name) === 'Vasos'
+                    ? `${Number(value)} vasos`
+                    : `${Number(value)} ml`,
+                  String(name),
+                ]}
+              />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  paddingTop: '6px',
+                }}
+              />
+
+              <Bar
+                yAxisId="ml"
+                dataKey="ml"
+                name="Agua"
+                fill="#0891b2"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+
+              <Line
+                yAxisId="ml"
+                type="monotone"
+                dataKey="referencia"
+                name="Referencia"
+                stroke="#2563eb"
+                strokeWidth={2}
+                connectNulls
+                dot={false}
+                isAnimationActive={false}
+              />
+
+              <Line
+                yAxisId="vasos"
+                type="monotone"
+                dataKey="vasos"
+                name="Vasos"
+                stroke="#16a34a"
+                strokeWidth={2}
+                connectNulls
+                dot={false}
+                isAnimationActive={false}
+              />
+            </ComposedChart>
+          </ChartPanel>
+
+          <ChartPanel
+            title="Estudio y sesiones"
+            subtitle={`${formatMinutes(studyMinutes)} / ${filteredStudySessions.length} sesiones / comprension media ${averageStudyComprehension || '--'}/5`}
+            height={235}
+          >
+            <ComposedChart
+              data={studyTrendData}
+              margin={{
+                top: 8,
+                right: 4,
+                left: -14,
+                bottom: 0,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+
+              <XAxis
+                dataKey="fecha"
+                interval="preserveStartEnd"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                yAxisId="minutes"
+                tick={{ fontSize: 10 }}
+              />
+
+              <YAxis
+                yAxisId="score"
+                orientation="right"
+                domain={[1, 5]}
+                ticks={[1, 2, 3, 4, 5]}
+                allowDecimals={false}
+                tick={{ fontSize: 10 }}
+                width={24}
+              />
+
+              <Tooltip
+                formatter={(value, name) => [
+                  String(name) === 'Minutos'
+                    ? formatMinutes(Number(value))
+                    : String(name) === 'Sesiones'
+                      ? `${Number(value)} sesiones`
+                      : `${Number(value).toFixed(1)}/5`,
+                  String(name),
+                ]}
+              />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  paddingTop: '6px',
+                }}
+              />
+
+              <Bar
+                yAxisId="minutes"
+                dataKey="minutos"
+                name="Minutos"
+                fill="#7c3aed"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+
+              <Bar
+                yAxisId="minutes"
+                dataKey="sesiones"
+                name="Sesiones"
+                fill="#2563eb"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+
+              <Line
+                yAxisId="score"
+                type="monotone"
+                dataKey="enfoque"
+                name="Enfoque"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                connectNulls
+                dot={{ r: 3 }}
+                isAnimationActive={false}
+              />
+
+              <Line
+                yAxisId="score"
+                type="monotone"
+                dataKey="comprension"
+                name="Comprension"
+                stroke="#16a34a"
+                strokeWidth={2}
+                connectNulls
+                dot={{ r: 3 }}
+                isAnimationActive={false}
+              />
+            </ComposedChart>
+          </ChartPanel>
+
+          <ChartPanel
+            title="Cursos"
+            subtitle={`${activeCourses.length} activos / ${courseStudyData.length} con actividad o pendientes`}
+            height={235}
+          >
+            <BarChart
+              data={courseStudyData}
+              margin={{
+                top: 8,
+                right: 8,
+                left: -12,
+                bottom: 12,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+
+              <XAxis
+                dataKey="etiqueta"
+                tick={{ fontSize: 9 }}
+                interval={0}
+              />
+
+              <YAxis tick={{ fontSize: 10 }} />
+
+              <Tooltip
+                labelFormatter={(label) => {
+                  const course = courseStudyData.find((item) => item.etiqueta === label)
+
+                  return course?.curso ?? String(label)
+                }}
+                formatter={(value, name) => [
+                  String(name) === 'Minutos'
+                    ? formatMinutes(Number(value))
+                    : Number(value),
+                  String(name),
+                ]}
+              />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: '10px',
+                  paddingTop: '6px',
+                }}
+              />
+
+              <Bar
+                dataKey="minutos"
+                name="Minutos"
+                fill="#0f766e"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+
+              <Bar
+                dataKey="sesiones"
+                name="Sesiones"
+                fill="#2563eb"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+
+              <Bar
+                dataKey="pendientes"
+                name="Pendientes"
+                fill="#f59e0b"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+            </BarChart>
+          </ChartPanel>
         </div>
       </section>
 
