@@ -21,8 +21,43 @@ import { confidenceFromSample, numericBaseline } from './insights/baselineEngine
 import { classifyMealText } from './insights/foodInsightEngine'
 import { buildActivityProfile } from './insights/activityEngine'
 import { studyInsights } from './insights/studyInsightEngine'
+import { crossAreaPatterns } from './insights/crossAreaPatternEngine'
 
 const stamp = '2026-08-03T12:00:00.000Z'
+
+const emptyAppData = (): AppData => ({
+  settings: createDefaultSettings(),
+  habits: [],
+  habitEntries: [],
+  priorities: [],
+  projects: [],
+  tasks: [],
+  workSessions: [],
+  recreationLogs: [],
+  sleepLogs: [],
+  mealLogs: [],
+  trainingLogs: [],
+  careLogs: [],
+  socialLogs: [],
+  accounts: [],
+  movements: [],
+  budgets: [],
+  obligations: [],
+  debts: [],
+  debtPayments: [],
+  funds: [],
+  principles: [],
+  motivationLinks: [],
+  dailyCheckIns: [],
+  moodEnergyLogs: [],
+  weightLogs: [],
+  hydrationLogs: [],
+  courses: [],
+  studyTopics: [],
+  courseActivities: [],
+  studySessions: [],
+  appNotifications: [],
+})
 
 const account = (id: string, openingBalance: number): FinancialAccount => ({
   id,
@@ -370,5 +405,111 @@ describe('personal profile insights', () => {
     expect(guidance.referenceMl).toBeGreaterThan(2700)
     expect(guidance.evidence).toContain('Entrenamiento registrado: 45 min.')
     expect(guidance.message).toContain('vasos')
+  })
+})
+
+describe('cross-area pattern insights', () => {
+  it('connects low sleep with lower energy when the records support it', () => {
+    const data = emptyAppData()
+    const lowSleepDates = ['2026-07-30', '2026-07-31', '2026-08-01']
+    const enoughSleepDates = ['2026-08-02', '2026-08-03', '2026-08-04']
+
+    data.sleepLogs = [
+      ...lowSleepDates.map((date, index): AppData['sleepLogs'][number] => ({
+        id: `sleep-low-${index}`,
+        createdAt: stamp,
+        updatedAt: stamp,
+        schemaVersion: 1,
+        date,
+        sleepAt: `${date}T01:00:00.000Z`,
+        wakeAt: `${date}T06:00:00.000Z`,
+        interruptions: 1,
+        napMinutes: 0,
+        durationHours: 5,
+        quality: 2,
+        wakeEnergy: 2,
+        lateWork: false,
+      })),
+      ...enoughSleepDates.map((date, index): AppData['sleepLogs'][number] => ({
+        id: `sleep-good-${index}`,
+        createdAt: stamp,
+        updatedAt: stamp,
+        schemaVersion: 1,
+        date,
+        sleepAt: `${date}T22:30:00.000Z`,
+        wakeAt: `${date}T06:30:00.000Z`,
+        interruptions: 0,
+        napMinutes: 0,
+        durationHours: 8,
+        quality: 4,
+        wakeEnergy: 4,
+        lateWork: false,
+      })),
+    ]
+
+    const insights = crossAreaPatterns(data, new Date('2026-08-13T12:00:00.000Z'))
+
+    expect(insights.find((insight) => insight.id === 'pattern-sleep-energy')?.message).toContain('recuperacion incompleta')
+  })
+
+  it('connects long work days with higher food expense', () => {
+    const data = emptyAppData()
+    const longDates = ['2026-07-25', '2026-07-26', '2026-07-27', '2026-07-28', '2026-07-29']
+    const shortDates = ['2026-08-01', '2026-08-02', '2026-08-03', '2026-08-04', '2026-08-05']
+
+    data.workSessions = [
+      ...longDates.map((date, index): AppData['workSessions'][number] => ({
+        id: `work-long-${index}`,
+        createdAt: stamp,
+        updatedAt: stamp,
+        schemaVersion: 1,
+        startedAt: `${date}T09:00:00.000Z`,
+        endedAt: `${date}T17:00:00.000Z`,
+        durationMinutes: 480,
+        breakMinutes: 30,
+        effectiveMinutes: 420,
+        type: 'Desarrollo',
+        result: 'Avance',
+        focusLevel: 4,
+        tags: [],
+      })),
+      ...shortDates.map((date, index): AppData['workSessions'][number] => ({
+        id: `work-short-${index}`,
+        createdAt: stamp,
+        updatedAt: stamp,
+        schemaVersion: 1,
+        startedAt: `${date}T09:00:00.000Z`,
+        endedAt: `${date}T11:00:00.000Z`,
+        durationMinutes: 120,
+        breakMinutes: 0,
+        effectiveMinutes: 120,
+        type: 'Desarrollo',
+        result: 'Avance',
+        focusLevel: 4,
+        tags: [],
+      })),
+    ]
+    data.movements = [
+      ...longDates.map((date, index) => movement({
+        id: `food-long-${index}`,
+        accountId: 'cash',
+        type: 'Gasto',
+        amount: 100,
+        dateTime: `${date}T18:00:00.000Z`,
+        category: 'Comida',
+      })),
+      ...shortDates.map((date, index) => movement({
+        id: `food-short-${index}`,
+        accountId: 'cash',
+        type: 'Gasto',
+        amount: 10,
+        dateTime: `${date}T12:00:00.000Z`,
+        category: 'Comida',
+      })),
+    ]
+
+    const insights = crossAreaPatterns(data, new Date('2026-08-13T12:00:00.000Z'))
+
+    expect(insights.find((insight) => insight.id === 'pattern-work-food-expense')?.message).toContain('cansado decides')
   })
 })
