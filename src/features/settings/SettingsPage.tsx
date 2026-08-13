@@ -25,7 +25,7 @@ import {
   type ImportPreview,
 } from '../../services/backupService'
 import { hashPin } from '../../services/cryptoService'
-import { deviceNotificationsSupported, requestDeviceNotificationPermission } from '../../services/deviceNotifications'
+import { deviceNotificationsSupported, requestDeviceNotificationPermission, showDeviceNotification } from '../../services/deviceNotifications'
 import { todayIso } from '../../utils/date'
 
 type SettingsSection =
@@ -231,6 +231,33 @@ export function SettingsPage() {
         ? 'La app podra mostrar avisos en el panel del telefono cuando el navegador lo permita.'
         : 'Puedes seguir usando la campana interna.',
       tone: enabled ? 'success' : 'warning',
+    })
+  }
+
+  const testDeviceNotification = async () => {
+    const permission = await requestDeviceNotificationPermission()
+    if (permission !== 'granted') {
+      await updateSettings({ deviceNotificationsEnabled: false })
+      addToast({
+        title: 'Permiso no concedido',
+        detail: 'El telefono no mostrara avisos fuera de la app hasta permitir notificaciones del sitio.',
+        tone: 'warning',
+      })
+      return
+    }
+
+    await updateSettings({ deviceNotificationsEnabled: true })
+    const shown = await showDeviceNotification({
+      title: 'Control Personal',
+      message: 'Prueba de notificacion. Si ves este aviso, el panel del telefono esta funcionando.',
+      actionRoute: '/',
+    })
+    addToast({
+      title: shown ? 'Aviso enviado' : 'No se pudo mostrar el aviso',
+      detail: shown
+        ? 'Revisa el panel de notificaciones del telefono.'
+        : 'El navegador no entrego la notificacion del dispositivo.',
+      tone: shown ? 'success' : 'warning',
     })
   }
 
@@ -625,6 +652,12 @@ export function SettingsPage() {
                     {data.settings.deviceNotificationsEnabled
                       ? 'Desactivar'
                       : 'Activar'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => void testDeviceNotification()}
+                  >
+                    Probar aviso
                   </Button>
                 </div>
               </label>
