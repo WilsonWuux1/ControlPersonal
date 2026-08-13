@@ -6827,24 +6827,26 @@ th { color: var(--muted); font-size: .82rem; }
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
-  padding: 16px;
-  box-shadow: var(--shadow-sm);
+  padding: 12px;
+  box-shadow: var(--shadow);
 }
 
 .dashboard-daily-evaluation {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .dashboard-daily-evaluation span,
 .progress-evaluation-panel span {
   color: var(--primary);
   font-weight: 800;
-  font-size: .82rem;
+  font-size: .74rem;
+  text-transform: uppercase;
 }
 
 .dashboard-daily-evaluation h3 {
-  font-size: 1.15rem;
+  font-size: 1rem;
+  line-height: 1.2;
 }
 
 .dashboard-daily-evaluation p,
@@ -6852,13 +6854,21 @@ th { color: var(--muted); font-size: .82rem; }
 .study-hero p,
 .wellbeing-hydration-card p {
   color: var(--muted);
+  font-size: .88rem;
+  line-height: 1.35;
 }
 
 .dashboard-daily-evaluation__action {
-  padding: 12px;
-  border-left: 4px solid var(--primary);
+  padding: 10px;
+  border-left: 3px solid var(--primary);
   border-radius: 8px;
   background: var(--surface-soft);
+}
+
+.dashboard-daily-evaluation__action strong,
+.progress-evaluation-grid article strong,
+.progress-pattern-grid article strong {
+  font-size: .95rem;
 }
 
 .dashboard-daily-evaluation details {
@@ -6873,7 +6883,7 @@ th { color: var(--muted); font-size: .82rem; }
 
 .wellbeing-hydration-card {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .wellbeing-hydration-card__summary {
@@ -6893,6 +6903,12 @@ th { color: var(--muted); font-size: .82rem; }
 
 .wellbeing-hydration-card__summary span {
   color: var(--muted);
+  font-size: .9rem;
+  line-height: 1.25;
+}
+
+.wellbeing-hydration-card__summary strong {
+  font-size: 1rem;
 }
 
 .wellbeing-hydration-actions {
@@ -6904,7 +6920,7 @@ th { color: var(--muted); font-size: .82rem; }
 
 .study-page {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .study-hero {
@@ -6917,7 +6933,7 @@ th { color: var(--muted); font-size: .82rem; }
 .study-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .study-course-list,
@@ -6978,7 +6994,7 @@ th { color: var(--muted); font-size: .82rem; }
 .progress-pattern-grid article span {
   display: block;
   color: var(--primary);
-  font-size: .78rem;
+  font-size: .72rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0;
@@ -7023,16 +7039,20 @@ th { color: var(--muted); font-size: .82rem; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-soft);
+  font-size: .84rem;
+  color: var(--text);
 }
 
 .settings-notification-toggles input[type='checkbox'] {
   flex: 0 0 auto;
   width: 18px !important;
-  height: 18px;
+  height: 18px !important;
+  min-height: 18px !important;
+  padding: 0;
   accent-color: var(--primary);
 }
 
@@ -7064,19 +7084,33 @@ th { color: var(--muted); font-size: .82rem; }
 }
 
 .study-page .stat-card {
-  min-height: auto;
+  min-height: 78px;
+  padding: 12px;
+  gap: 10px;
 }
 
 .study-page .stat-card strong {
-  font-size: 1.25rem;
+  font-size: 1.05rem;
+  line-height: 1.15;
+}
+
+.study-page .stat-card p {
+  font-size: .78rem;
+  line-height: 1.15;
+}
+
+.study-page .stat-icon {
+  width: 36px;
+  height: 36px;
 }
 
 .study-hero h2 {
-  font-size: 1.25rem;
+  font-size: 1.05rem;
+  line-height: 1.2;
 }
 
 .study-hero p {
-  font-size: .95rem;
+  font-size: .86rem;
   line-height: 1.35;
 }
 
@@ -7495,47 +7529,73 @@ th { color: var(--muted); font-size: .82rem; }
   }
 
   .study-page .stat-card {
-    padding: 12px;
+    padding: 10px;
     grid-template-columns: auto minmax(0, 1fr);
-    gap: 10px;
+    gap: 8px;
+    min-height: 72px;
   }
 
   .study-page .stat-icon {
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
   }
 
   .study-page .stat-card p {
-    font-size: .78rem;
+    font-size: .72rem;
     line-height: 1.15;
   }
 
   .study-page .stat-card strong {
-    font-size: 1.05rem;
+    font-size: .98rem;
   }
 
   .study-hero {
-    padding: 14px;
+    padding: 12px;
   }
 
   .study-hero h2 {
-    font-size: 1.35rem;
+    font-size: 1.05rem;
   }
 
   .study-hero .button {
     width: 100%;
+    min-height: 42px;
   }
 
   .settings-notification-toggles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .settings-notification-toggles label {
-    min-height: 48px;
-    padding: 10px 12px;
+    min-height: 42px;
+    padding: 8px 10px;
+    font-size: .78rem;
   }
 
   .progress-pattern-grid article span {
-    font-size: .72rem;
+    font-size: .68rem;
+  }
+
+  .dashboard-daily-evaluation,
+  .wellbeing-hydration-card,
+  .progress-evaluation-panel {
+    padding: 12px;
+  }
+
+  .dashboard-daily-evaluation h3 {
+    font-size: .98rem;
+  }
+
+  .dashboard-daily-evaluation p,
+  .progress-evaluation-panel p,
+  .study-hero p,
+  .wellbeing-hydration-card p {
+    font-size: .84rem;
+  }
+
+  .progress-evaluation-grid,
+  .progress-pattern-grid {
+    grid-template-columns: 1fr;
   }
 }
