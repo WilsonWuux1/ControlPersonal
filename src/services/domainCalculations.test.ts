@@ -15,6 +15,8 @@ import { calculateSleepDurationHours, calculateWorkSessionDuration } from './tim
 import { detectDuplicateIds } from './backupService'
 import { bodyProfileSummary, getProfileSummary } from './personalInsights'
 import { createDefaultSettings } from '../db/initialData'
+import { createLinkedTrainingHabitEntry, isTrainingHabitName } from './linkedActivities'
+import { calculateHydrationGuidance } from './hydrationGuidance'
 
 const stamp = '2026-08-03T12:00:00.000Z'
 
@@ -198,6 +200,18 @@ describe('habit and time calculations', () => {
     })
     expect(calculateSleepDurationHours('2026-08-03T04:00:00.000Z', '2026-08-03T11:30:00.000Z', 30)).toBe(8)
   })
+
+  it('links wellbeing training minutes to the training habit entry', () => {
+    const training = habit('habit-1')
+    const existing = habitEntry('entry-1', 'habit-1', 5)
+    const linked = createLinkedTrainingHabitEntry(training, existing, '2026-08-03', 28)
+
+    expect(isTrainingHabitName('Entrenamiento')).toBe(true)
+    expect(isTrainingHabitName('Lectura')).toBe(false)
+    expect(linked.id).toBe('entry-1')
+    expect(linked.value).toBe(33)
+    expect(linked.status).toBe('target')
+  })
 })
 
 describe('backup helpers', () => {
@@ -253,5 +267,22 @@ describe('personal profile insights', () => {
     expect(summary.description).toContain('IMC de 34.9')
     expect(summary.description).toContain('obesidad grado I')
     expect(summary.description).toContain('meta inicial de 192 lb')
+  })
+
+  it('calculates hydration guidance from profile and daily conditions', () => {
+    const guidance = calculateHydrationGuidance(
+      {
+        ...createDefaultSettings(),
+        birthDate: '1992-08-03',
+        heightCm: 162,
+        weightLb: 202,
+      },
+      { trainingMinutes: 45, highHeat: true },
+    )
+
+    expect(guidance.status).toBe('reference')
+    expect(guidance.referenceMl).toBeGreaterThan(2700)
+    expect(guidance.evidence).toContain('Entrenamiento registrado: 45 min.')
+    expect(guidance.message).toContain('vasos')
   })
 })

@@ -19,7 +19,7 @@ const browserGlobals = {
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'playwright-report/**'],
+    ignores: ['dist/**', 'dev-dist/**', 'node_modules/**', 'coverage/**', 'playwright-report/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

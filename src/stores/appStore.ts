@@ -12,6 +12,7 @@ import {
   initialPrinciples,
 } from '../db/initialData'
 import { applyDebtPayment, applyObligationPayment, obligationStatus } from '../services/financeCalculations'
+import { createLinkedTrainingHabitEntry, isTrainingHabitName } from '../services/linkedActivities'
 import { calculateSleepDurationHours, calculateWorkSessionDuration } from '../services/timeCalculations'
 import type {
   AppData,
@@ -43,7 +44,7 @@ import type {
   WeightLog,
 } from '../types/domain'
 import type { ToastMessage } from '../types/forms'
-import { newId, nowIso, todayIso } from '../utils/date'
+import { newId, nowIso, todayIso, toDateKey } from '../utils/date'
 
 type EntityDraft<T extends { id: string; createdAt: string; updatedAt: string; schemaVersion: number }> = Omit<
   T,
@@ -284,8 +285,28 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
   addTrainingLog: async (log) => {
     const record = withBase<TrainingLog>(log)
-    await db.trainingLogs.add(record)
-    if (!updateLoadedData(set, (data) => ({ ...data, trainingLogs: [...data.trainingLogs, record] }))) await refresh(set)
+    let linkedHabitEntry: HabitEntry | undefined
+    await db.transaction('rw', db.trainingLogs, db.habits, db.habitEntries, async () => {
+      await db.trainingLogs.add(record)
+      const trainingHabit = await db.habits.filter((habit) => habit.status === 'active' && isTrainingHabitName(habit.name)).first()
+      if (!trainingHabit) return
+      const date = toDateKey(record.dateTime)
+      const existingEntry = await db.habitEntries.where('[habitId+date]').equals([trainingHabit.id, date]).first()
+      linkedHabitEntry = withBase<HabitEntry>(createLinkedTrainingHabitEntry(trainingHabit, existingEntry, date, record.durationMinutes))
+      await db.habitEntries.put(linkedHabitEntry)
+    })
+    if (
+      !updateLoadedData(set, (data) => ({
+        ...data,
+        trainingLogs: [...data.trainingLogs, record],
+        habitEntries: linkedHabitEntry
+          ? data.habitEntries.some((entry) => entry.id === linkedHabitEntry?.id)
+            ? data.habitEntries.map((entry) => (entry.id === linkedHabitEntry?.id ? linkedHabitEntry : entry))
+            : [...data.habitEntries, linkedHabitEntry]
+          : data.habitEntries,
+      }))
+    )
+      await refresh(set)
   },
   addCareLog: async (log) => {
     const record = withBase<CareLog>(log)
