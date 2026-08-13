@@ -1,9 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { BookOpen, CheckCircle2, Clock, GraduationCap, ListChecks, Play, Plus, Square } from 'lucide-react'
+import { BookOpen, CheckCircle2, Clock, GraduationCap, ListChecks, Play, Plus, Square, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { Button } from '../../components/Button'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { StatCard } from '../../components/StatCard'
 import { studyInsights, studyMinutesThisWeek } from '../../services/insights/studyInsightEngine'
 import { useAppStore } from '../../stores/appStore'
@@ -108,6 +109,7 @@ const comprehensionOptions = [
 export function StudyPage() {
   const data = useAppStore((state) => state.data)
   const addCourse = useAppStore((state) => state.addCourse)
+  const deleteCourse = useAppStore((state) => state.deleteCourse)
   const addStudyTopic = useAppStore((state) => state.addStudyTopic)
   const addCourseActivity = useAppStore((state) => state.addCourseActivity)
   const updateCourseActivity = useAppStore((state) => state.updateCourseActivity)
@@ -116,6 +118,7 @@ export function StudyPage() {
   const finishStudySession = useAppStore((state) => state.finishStudySession)
   const [selectedCourseId, setSelectedCourseId] = useState<string | undefined>(data?.courses.find((course) => course.status === 'active')?.id)
   const [courseFormOpen, setCourseFormOpen] = useState(false)
+  const [courseToDelete, setCourseToDelete] = useState<Course | null>(null)
 
   const courseForm = useForm<CourseFormInput, unknown, CourseForm>({ resolver: zodResolver(courseSchema), defaultValues: { name: '', language: '', targetWeeklyMinutes: 240 } })
   const topicForm = useForm<TopicFormInput, unknown, TopicForm>({ resolver: zodResolver(topicSchema), defaultValues: { name: '', importance: 3, currentMastery: 2, difficulty: 3 } })
@@ -224,6 +227,16 @@ export function StudyPage() {
     })
   }
 
+  const confirmDeleteCourse = async () => {
+    if (!courseToDelete) return
+    await deleteCourse(courseToDelete.id)
+    if (selectedCourseId === courseToDelete.id) {
+      const nextCourse = courses.find((course) => course.id !== courseToDelete.id)
+      setSelectedCourseId(nextCourse?.id)
+    }
+    setCourseToDelete(null)
+  }
+
   return (
     <div className="study-page stack">
       <section className="stat-grid">
@@ -282,10 +295,15 @@ export function StudyPage() {
         {courses.length > 0 ? (
           <div className="study-course-list">
             {courses.map((course) => (
-              <button key={course.id} type="button" className={course.id === selectedCourse?.id ? 'active' : undefined} onClick={() => setSelectedCourseId(course.id)}>
-                <span style={{ background: course.color }} />
-                {course.name}
-              </button>
+              <div key={course.id} className={course.id === selectedCourse?.id ? 'study-course-chip active' : 'study-course-chip'}>
+                <button type="button" onClick={() => setSelectedCourseId(course.id)}>
+                  <span style={{ background: course.color }} />
+                  {course.name}
+                </button>
+                <button type="button" aria-label={`Eliminar ${course.name}`} onClick={() => setCourseToDelete(course)}>
+                  <Trash2 size={15} />
+                </button>
+              </div>
             ))}
           </div>
         ) : (
@@ -426,6 +444,14 @@ export function StudyPage() {
           </article>
         </section>
       ) : null}
+      <ConfirmDialog
+        open={Boolean(courseToDelete)}
+        title="Eliminar curso"
+        message={`Se eliminara ${courseToDelete?.name ?? 'este curso'} junto con sus temas, actividades y sesiones. Esta accion no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        onCancel={() => setCourseToDelete(null)}
+        onConfirm={() => void confirmDeleteCourse()}
+      />
     </div>
   )
 }

@@ -23,6 +23,7 @@ import { todayIso } from '../../utils/date'
 import { formatCurrency, formatMinutes } from '../../utils/format'
 import { bodyProfileSummary, getProfileSummary, motivationForLowMood, recommendationSeed } from '../../services/personalInsights'
 import { generateDailyEvaluation } from '../../services/insights/evaluationEngine'
+import { crossAreaPatterns } from '../../services/insights/crossAreaPatternEngine'
 import { financeInsights } from '../../services/insights/financeInsightEngine'
 import { studyInsights } from '../../services/insights/studyInsightEngine'
 
@@ -41,11 +42,11 @@ const insightAreaLabels: Record<string, string> = {
   finance: 'Finanzas',
   recreation: 'Recreacion',
 }
-const confidenceLabels: Record<string, string> = {
-  insufficient: 'insuficiente',
-  low: 'baja',
-  medium: 'media',
-  high: 'alta',
+const patternStrengthLabels: Record<string, string> = {
+  insufficient: 'Datos insuficientes',
+  low: 'Senal inicial',
+  medium: 'Patron posible',
+  high: 'Patron fuerte',
 }
 
 const localDateKey = (date: Date): string => {
@@ -362,7 +363,7 @@ const selectedPeriodStyle = {
   const recommendations = recommendationSeed(data)
   const motivation = motivationForLowMood(data)
   const dailyEvaluation = generateDailyEvaluation(data)
-  const patternInsights = [...studyInsights(data), ...financeInsights(data)].slice(0, 4)
+  const patternInsights = [...crossAreaPatterns(data), ...studyInsights(data), ...financeInsights(data)].slice(0, 4)
   const plannedMeals = filteredMealLogs.length ? filteredMealLogs.filter((meal) => meal.planned).length / filteredMealLogs.length : 0
   const scrollMinutes = filteredRecreationLogs.filter((log) => log.type === 'Desplazamiento automatico').reduce((sum, log) => sum + log.durationMinutes, 0)
   const creativeMinutes = filteredRecreationLogs.filter((log) => log.type === 'Creacion de contenido').reduce((sum, log) => sum + log.durationMinutes, 0)
@@ -823,32 +824,31 @@ const selectedPeriodStyle = {
       </section>
 
       <section className="panel progress-evaluation-panel">
-        <div className="progress-analysis-section-heading">
-          <div>
-            <span>Evaluaciones</span>
-            <h2>{dailyEvaluation.title}</h2>
-          </div>
+        <div className="progress-evaluation-main">
+          <span>Evaluacion personal</span>
+          <h2>{dailyEvaluation.title}</h2>
           <p>{dailyEvaluation.message}</p>
-        </div>
-        <div className="progress-evaluation-grid">
-          <article>
+          <div>
             <strong>Que hacer ahora</strong>
             <p>{dailyEvaluation.mainAction}</p>
-          </article>
-          {dailyEvaluation.evidence.slice(0, 3).map((item) => (
-            <article key={item}>
-              <strong>Evidencia</strong>
-              <p>{item}</p>
-            </article>
-          ))}
+          </div>
+          <details>
+            <summary>Que estoy tomando en cuenta</summary>
+            <ul>
+              {dailyEvaluation.evidence.slice(0, 5).map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </details>
         </div>
         {patternInsights.length > 0 ? (
           <div className="progress-pattern-grid">
             {patternInsights.map((insight) => (
               <article key={insight.id}>
-                <span>{insightAreaLabels[insight.area]} · confianza {confidenceLabels[insight.confidence]}</span>
+                <span>{patternStrengthLabels[insight.confidence]} / {insightAreaLabels[insight.area]}</span>
                 <strong>{insight.title}</strong>
                 <p>{insight.message}</p>
+                {insight.action ? <small>{insight.action}</small> : null}
               </article>
             ))}
           </div>

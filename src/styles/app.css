@@ -7010,6 +7010,118 @@ th { color: var(--muted); font-size: .82rem; }
   border-radius: 999px;
 }
 
+.study-course-chip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.study-course-chip.active {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.study-course-list .study-course-chip > button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.study-course-list .study-course-chip > button:first-child {
+  min-width: 0;
+  justify-content: flex-start;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.study-course-list .study-course-chip > button:first-child span {
+  flex: 0 0 auto;
+}
+
+.study-course-list .study-course-chip > button:last-child {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.study-course-list .study-course-chip > button:last-child:hover,
+.study-course-list .study-course-chip > button:last-child:focus-visible {
+  color: #b91c1c;
+}
+
+.progress-evaluation-panel {
+  display: grid;
+  grid-template-columns: minmax(0, .92fr) minmax(260px, 1.08fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.progress-evaluation-main {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.progress-evaluation-main > span {
+  display: block;
+}
+
+.progress-evaluation-main h2 {
+  margin: 0;
+  font-size: 1.08rem;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.progress-evaluation-main p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.progress-evaluation-main > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-left: 3px solid var(--primary);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.progress-evaluation-main > div strong,
+.progress-evaluation-main summary {
+  font-size: .88rem;
+  font-weight: 800;
+}
+
+.progress-evaluation-main details {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.progress-evaluation-main summary {
+  cursor: pointer;
+}
+
+.progress-evaluation-main ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: .84rem;
+  line-height: 1.35;
+}
+
+.progress-pattern-grid {
+  min-width: 0;
+}
+
 .study-row,
 .insight-card,
 .progress-pattern-grid article,
@@ -7044,6 +7156,17 @@ th { color: var(--muted); font-size: .82rem; }
 
 .progress-pattern-grid article strong {
   line-height: 1.15;
+}
+
+.progress-pattern-grid article small {
+  display: block;
+  margin: 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: .8rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .study-row {
@@ -7653,5 +7776,13 @@ th { color: var(--muted); font-size: .82rem; }
   .progress-evaluation-grid,
   .progress-pattern-grid {
     grid-template-columns: 1fr;
+  }
+
+  .progress-evaluation-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-evaluation-main h2 {
+    font-size: 1rem;
   }
 }

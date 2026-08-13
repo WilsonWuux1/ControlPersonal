@@ -122,6 +122,7 @@ interface AppStore {
   addWeightLog: (log: EntityDraft<WeightLog>) => Promise<void>
   addCourse: (course: EntityDraft<Course>) => Promise<void>
   updateCourse: (course: Course) => Promise<void>
+  deleteCourse: (id: string) => Promise<void>
   addStudyTopic: (topic: EntityDraft<StudyTopic>) => Promise<void>
   updateStudyTopic: (topic: StudyTopic) => Promise<void>
   addCourseActivity: (activity: EntityDraft<CourseActivity>) => Promise<void>
@@ -530,6 +531,24 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const record = { ...course, updatedAt: nowIso() }
     await db.courses.put(record)
     if (!updateLoadedData(set, (data) => ({ ...data, courses: data.courses.map((item) => (item.id === record.id ? record : item)) }))) await refresh(set)
+  },
+  deleteCourse: async (id) => {
+    await db.transaction('rw', db.courses, db.studyTopics, db.courseActivities, db.studySessions, async () => {
+      await db.courses.delete(id)
+      await db.studyTopics.where('courseId').equals(id).delete()
+      await db.courseActivities.where('courseId').equals(id).delete()
+      await db.studySessions.where('courseId').equals(id).delete()
+    })
+    if (
+      !updateLoadedData(set, (data) => ({
+        ...data,
+        courses: data.courses.filter((course) => course.id !== id),
+        studyTopics: data.studyTopics.filter((topic) => topic.courseId !== id),
+        courseActivities: data.courseActivities.filter((activity) => activity.courseId !== id),
+        studySessions: data.studySessions.filter((session) => session.courseId !== id),
+      }))
+    )
+      await refresh(set)
   },
   addStudyTopic: async (topic) => {
     const record = withBase<StudyTopic>(topic)

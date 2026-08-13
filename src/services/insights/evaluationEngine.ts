@@ -2,6 +2,7 @@ import type { AppData } from '../../types/domain'
 import { todayIso } from '../../utils/date'
 import { averageSleepHours, dailyEffectiveWorkMinutes } from '../timeCalculations'
 import { buildActivityProfile } from './activityEngine'
+import { crossAreaPatterns } from './crossAreaPatternEngine'
 import { financeInsights } from './financeInsightEngine'
 import { studyInsights, studyMinutesThisWeek } from './studyInsightEngine'
 import type { DailyEvaluation, PersonalInsight } from './insightTypes'
@@ -9,18 +10,23 @@ import type { DailyEvaluation, PersonalInsight } from './insightTypes'
 export const generateDailyEvaluation = (data: AppData, now = new Date()): DailyEvaluation => {
   const today = todayIso()
   const checkIn = data.dailyCheckIns.find((item) => item.date === today)
+  const todayMoodEnergyLogs = data.moodEnergyLogs
+    .filter((item) => item.date === today)
+    .sort((left, right) => right.dateTime.localeCompare(left.dateTime))
+  const latestMoodEnergy = todayMoodEnergyLogs[0]
   const activity = buildActivityProfile(data, now)
   const sleepAverage = averageSleepHours(data.sleepLogs)
   const workMinutes = dailyEffectiveWorkMinutes(data.workSessions, today)
   const insights: PersonalInsight[] = [
+    ...crossAreaPatterns(data, now),
     ...studyInsights(data, now),
     ...financeInsights(data, now),
   ].slice(0, 4)
 
-  const hasEnergy = typeof checkIn?.energy === 'number'
-  const hasMood = typeof checkIn?.mood === 'number'
-  const energy = checkIn?.energy
-  const mood = checkIn?.mood
+  const energy = checkIn?.energy ?? latestMoodEnergy?.energy
+  const mood = checkIn?.mood ?? latestMoodEnergy?.mood
+  const hasEnergy = typeof energy === 'number'
+  const hasMood = typeof mood === 'number'
   const lowEnergy = (energy ?? 3) <= 2
   const lowMood = (mood ?? 3) <= 2
   const goodEnergy = (energy ?? 0) >= 4
@@ -29,30 +35,34 @@ export const generateDailyEvaluation = (data: AppData, now = new Date()): DailyE
   const needsPersonalSignals = !hasEnergy || !hasMood
 
   const title = needsPersonalSignals
-    ? 'Primero calibra el dia.'
+    ? 'Me falta saber como te sientes.'
     : lowEnergy || lowMood
       ? 'Hoy conviene recuperar energia.'
       : goodEnergy && goodMood && strongActivity
         ? 'Vas construyendo una buena base.'
         : 'El dia esta estable.'
 
-  const message = needsPersonalSignals
-    ? 'Todavia falta tu lectura personal de energia y animo. Sin eso puedo ver actividad, trabajo o sueno, pero no se como te estas sintiendo hoy.'
+  const strongestPattern = insights.find((insight) => insight.area === 'general' && insight.priority === 'high')
+
+  const message = strongestPattern
+    ? `${strongestPattern.message} Por eso hoy conviene actuar antes de que ese patron se repita.`
+    : needsPersonalSignals
+    ? 'Puedo leer tus registros de trabajo, actividad, sueno y finanzas, pero todavia no se si hoy estas cansado, animado, disperso o estable. Ese dato cambia mucho el consejo: no es lo mismo estar sin actividad por descanso que por apatia.'
     : lowEnergy || lowMood
-      ? 'Tu energia o animo estan bajos. En este contexto conviene elegir una accion pequena que reduzca friccion, no una meta pesada.'
+      ? 'Tu lectura personal esta baja. Cuando energia o animo bajan, el sistema prioriza acciones cortas porque suelen funcionar mejor que exigirte una rutina completa.'
       : goodEnergy && goodMood && strongActivity
         ? 'Tus senales principales van bien. El siguiente paso no es exigirte mas, sino mantener lo que ya esta funcionando.'
-        : 'No aparece una senal fuerte de desorden. El siguiente paso es proteger continuidad con una accion concreta antes de que el dia se diluya.'
+        : 'Tu dia no se ve perdido, pero tampoco hay suficiente impulso registrado. Conviene cerrar una accion pequena para que el progreso no dependa solo de motivacion.'
 
-  const mainAction = needsPersonalSignals
-    ? 'Registra energia y animo; despues el sistema podra recomendar con mas precision.'
+  const mainAction = strongestPattern?.action ?? (needsPersonalSignals
+    ? 'Guarda energia y animo. Con eso puedo relacionar si tus decisiones vienen mas de cansancio, falta de sueno, trabajo acumulado o desorden de comida.'
     : activity.readiness === 'recover'
       ? 'Haz una pausa corta, toma agua y usa movimiento suave para recuperar energia sin exigirte de mas.'
       : activity.last7DaysMinutes < 30
         ? 'Haz 5 a 10 minutos de movimiento. Sirve para mantener continuidad sin convertirlo en una rutina pesada.'
         : goodEnergy && goodMood && strongActivity
           ? 'Manten el ritmo: registra una accion clave y evita subir intensidad solo por sentir que puedes hacer mas.'
-          : 'Elige una accion de cierre: movimiento corto, prioridad simple o preparar comida para que el cansancio no decida por ti.'
+          : 'Elige una accion de cierre: movimiento corto, prioridad simple o preparar comida para que el cansancio no decida por ti.')
 
   const evidence = [
     hasEnergy ? `Tu energia hoy esta en ${energy}/5.` : 'Aun no registraste tu energia de hoy.',
