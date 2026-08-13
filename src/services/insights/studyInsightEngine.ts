@@ -4,6 +4,23 @@ import type { PersonalInsight } from './insightTypes'
 
 const sum = (values: number[]): number => values.reduce((total, value) => total + value, 0)
 const average = (values: number[]): number => (values.length ? Number((sum(values) / values.length).toFixed(1)) : 0)
+const priorityLabel = {
+  low: 'Baja',
+  medium: 'Media',
+  high: 'Alta',
+  critical: 'Critica',
+} as const
+const activityStatusLabel = {
+  pending: 'Pendiente',
+  'in-progress': 'En progreso',
+  completed: 'Completada',
+} as const
+const topicStatusLabel = {
+  'not-started': 'Sin iniciar',
+  learning: 'Aprendiendo',
+  reviewing: 'Repasando',
+  mastered: 'Dominado',
+} as const
 
 export const studyMinutesThisWeek = (data: Pick<AppData, 'studySessions'>, now = new Date()): number => {
   const start = subDays(now, 6)
@@ -40,7 +57,7 @@ export const studyInsights = (data: Pick<AppData, 'courses' | 'courseActivities'
       area: 'study',
       title: `${upcoming.title} es la siguiente actividad academica.`,
       message: `${course?.name ?? 'Un curso'} tiene una actividad pendiente con fecha limite ${upcoming.dueDate}. Conviene decidir si tu proxima sesion debe avanzar eso antes de abrir contenido nuevo.`,
-      evidence: [`Prioridad: ${upcoming.priority}.`, `Estado: ${upcoming.status}.`],
+      evidence: [`Prioridad: ${priorityLabel[upcoming.priority]}.`, `Estado: ${activityStatusLabel[upcoming.status]}.`],
       action: 'Programar sesion de estudio',
       priority: upcoming.priority === 'critical' || upcoming.priority === 'high' ? 'high' : 'medium',
       confidence: 'medium',
@@ -59,7 +76,7 @@ export const studyInsights = (data: Pick<AppData, 'courses' | 'courseActivities'
       area: 'study',
       title: `${weakTopic.name} necesita refuerzo.`,
       message: `El tema combina importancia ${weakTopic.importance}/5, dificultad ${weakTopic.difficulty}/5 y dominio actual ${weakTopic.currentMastery}/5.`,
-      evidence: [`Estado actual: ${weakTopic.status}.`],
+      evidence: [`Estado actual: ${topicStatusLabel[weakTopic.status]}.`],
       action: 'Hacer una sesion corta de practica o repaso',
       priority: weakTopic.importance >= 4 ? 'high' : 'medium',
       confidence: data.studyTopics.length >= 3 ? 'medium' : 'low',

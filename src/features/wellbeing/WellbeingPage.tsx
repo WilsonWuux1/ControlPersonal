@@ -522,6 +522,17 @@ export function WellbeingPage() {
           </div>
         </div>
         <p>{hydrationGuidance.message}</p>
+        {hydrationGuidance.reason ? (
+          <details className="wellbeing-hydration-reason">
+            <summary>Por que esta cantidad</summary>
+            <p>{hydrationGuidance.reason}</p>
+            <ul>
+              {hydrationGuidance.evidence.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
         <div className="wellbeing-hydration-actions">
           <Button
             variant="secondary"

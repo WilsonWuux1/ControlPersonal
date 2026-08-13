@@ -16,6 +16,7 @@ export interface HydrationGuidance {
   glassCount?: number
   message: string
   evidence: string[]
+  reason?: string
 }
 
 const mlPerGlass = 250
@@ -31,6 +32,7 @@ export const calculateHydrationGuidance = (settings: AppSettings, conditions: Hy
       status: 'missing-profile',
       message: 'Agrega peso, altura y fecha de nacimiento para calcular una referencia diaria de agua con tu perfil.',
       evidence: ['Faltan datos corporales completos.'],
+      reason: 'El sistema necesita esos datos para evitar una meta generica.',
     }
   }
 
@@ -38,7 +40,10 @@ export const calculateHydrationGuidance = (settings: AppSettings, conditions: Hy
   const baselineMin = weightKg * 25
   const baselineMax = weightKg * 35
   let adjustment = 0
-  const evidence = [`Perfil: ${profile.age} anos, ${profile.heightCm} cm, ${profile.weightLb} lb.`]
+  const evidence = [
+    `Perfil: ${profile.age} anos, ${profile.heightCm} cm, ${profile.weightLb} lb.`,
+    `Base usada: 25-35 ml por kg de peso corporal como referencia general.`,
+  ]
 
   if ((conditions.trainingMinutes ?? 0) >= 30) {
     adjustment += 350
@@ -68,7 +73,8 @@ export const calculateHydrationGuidance = (settings: AppSettings, conditions: Hy
     rangeMinMl,
     rangeMaxMl,
     glassCount,
-    message: `Referencia diaria: ${referenceMl} ml, aproximadamente ${glassCount} vasos de ${mlPerGlass} ml. Ajusta segun sed, actividad y condiciones del dia.`,
+    message: `Referencia diaria: ${referenceMl} ml, aproximadamente ${glassCount} vasos de ${mlPerGlass} ml.`,
     evidence,
+    reason: `Sale de tu peso convertido a kg (${weightKg.toFixed(1)} kg), un rango base de ${rangeMinMl}-${rangeMaxMl} ml y los ajustes marcados para el dia. No es una orden fija: es una referencia personal para registrar mejor.`,
   }
 }

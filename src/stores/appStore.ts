@@ -12,6 +12,7 @@ import {
   initialPrinciples,
 } from '../db/initialData'
 import { applyDebtPayment, applyObligationPayment, obligationStatus } from '../services/financeCalculations'
+import { showDeviceNotification } from '../services/deviceNotifications'
 import { generateInternalNotifications } from '../services/insights/notificationEngine'
 import { createLinkedTrainingHabitEntry, isTrainingHabitName } from '../services/linkedActivities'
 import { calculateSleepDurationHours, calculateWorkSessionDuration } from '../services/timeCalculations'
@@ -177,7 +178,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
     const notificationDrafts = generateInternalNotifications(data)
     if (notificationDrafts.length > 0) {
-      await db.appNotifications.bulkAdd(notificationDrafts.map((notification) => withBase<AppNotification>(notification)))
+      const records = notificationDrafts.map((notification) => withBase<AppNotification>(notification))
+      await db.appNotifications.bulkAdd(records)
+      if (data.settings.deviceNotificationsEnabled) {
+        await Promise.all(records.slice(0, 1).map((notification) => showDeviceNotification(notification)))
+      }
     }
     set({ data: await loadAppData(), loading: false, locked: data.settings.lockEnabled })
   },
@@ -572,6 +577,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (existing && !existing.dismissedAt) return
     const record = withBase<AppNotification>(notification)
     await db.appNotifications.add(record)
+    if (useAppStore.getState().data?.settings.deviceNotificationsEnabled) {
+      await showDeviceNotification(record)
+    }
     if (!updateLoadedData(set, (data) => ({ ...data, appNotifications: [...data.appNotifications, record] }))) await refresh(set)
   },
   markNotificationRead: async (id) => {

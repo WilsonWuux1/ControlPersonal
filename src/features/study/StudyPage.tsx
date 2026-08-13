@@ -53,6 +53,23 @@ type ActivityForm = z.output<typeof activitySchema>
 type SessionForm = z.output<typeof sessionSchema>
 
 const colors = ['#2563eb', '#16a34a', '#7c3aed', '#ea580c', '#0891b2', '#db2777']
+const topicStatusLabel: Record<StudyTopicStatus, string> = {
+  'not-started': 'Sin iniciar',
+  learning: 'Aprendiendo',
+  reviewing: 'Repasando',
+  mastered: 'Dominado',
+}
+const activityPriorityLabel: Record<CourseActivityPriority, string> = {
+  low: 'Baja',
+  medium: 'Media',
+  high: 'Alta',
+  critical: 'Critica',
+}
+const activityStatusLabel = {
+  pending: 'Pendiente',
+  'in-progress': 'En progreso',
+  completed: 'Completada',
+} as const
 
 export function StudyPage() {
   const data = useAppStore((state) => state.data)
@@ -255,7 +272,7 @@ export function StudyPage() {
               {courseTopics.map((topic) => (
                 <div key={topic.id} className="study-row">
                   <strong>{topic.name}</strong>
-                  <span>Dominio {topic.currentMastery}/5 · dificultad {topic.difficulty}/5 · {topic.status as StudyTopicStatus}</span>
+                  <span>Dominio {topic.currentMastery}/5 · dificultad {topic.difficulty}/5 · {topicStatusLabel[topic.status]}</span>
                 </div>
               ))}
             </div>
@@ -284,7 +301,7 @@ export function StudyPage() {
                 <div key={activity.id} className="study-row">
                   <div>
                     <strong>{activity.title}</strong>
-                    <span>{activity.priority} · {activity.dueDate ?? 'sin fecha'} · {activity.status}</span>
+                    <span>{activityPriorityLabel[activity.priority]} · {activity.dueDate ?? 'sin fecha'} · {activityStatusLabel[activity.status]}</span>
                   </div>
                   {activity.status !== 'completed' ? (
                     <Button variant="secondary" icon={<CheckCircle2 size={16} />} onClick={() => void updateCourseActivity({ ...activity, status: 'completed' })}>

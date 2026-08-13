@@ -48,6 +48,7 @@ export const createDefaultSettings = (): AppSettings => ({
   movementReminderMinutes: 55,
   notificationQuietStart: '22:30',
   notificationQuietEnd: '07:00',
+  deviceNotificationsEnabled: false,
   notificationPreferences: {
     general: true,
     habits: true,

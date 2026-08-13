@@ -25,6 +25,7 @@ import {
   type ImportPreview,
 } from '../../services/backupService'
 import { hashPin } from '../../services/cryptoService'
+import { deviceNotificationsSupported, requestDeviceNotificationPermission } from '../../services/deviceNotifications'
 import { todayIso } from '../../utils/date'
 
 type SettingsSection =
@@ -208,6 +209,28 @@ export function SettingsPage() {
       title: 'Peso registrado',
       detail: `${weight} lb`,
       tone: 'success',
+    })
+  }
+
+  const enableDeviceNotifications = async () => {
+    if (!deviceNotificationsSupported()) {
+      addToast({
+        title: 'No disponible en este navegador',
+        detail: 'Las notificaciones internas seguiran funcionando dentro de la app.',
+        tone: 'warning',
+      })
+      return
+    }
+
+    const permission = await requestDeviceNotificationPermission()
+    const enabled = permission === 'granted'
+    await updateSettings({ deviceNotificationsEnabled: enabled })
+    addToast({
+      title: enabled ? 'Notificaciones del dispositivo activadas' : 'Permiso no concedido',
+      detail: enabled
+        ? 'La app podra mostrar avisos en el panel del telefono cuando el navegador lo permita.'
+        : 'Puedes seguir usando la campana interna.',
+      tone: enabled ? 'success' : 'warning',
     })
   }
 
@@ -577,6 +600,35 @@ export function SettingsPage() {
         {openSection === 'notifications' ? (
           <div className="settings-collapse__body">
             <div className="settings-form-grid">
+              <label className="settings-field-wide">
+                Panel del telefono
+                <div className="settings-inline-control">
+                  <div>
+                    <strong>
+                      {data.settings.deviceNotificationsEnabled
+                        ? 'Activadas'
+                        : 'Desactivadas'}
+                    </strong>
+                    <span>
+                      Requiere permiso del navegador. Sin backend no se garantizan
+                      avisos exactos con la app completamente cerrada.
+                    </span>
+                  </div>
+                  <Button
+                    variant={data.settings.deviceNotificationsEnabled ? 'secondary' : 'primary'}
+                    onClick={() =>
+                      data.settings.deviceNotificationsEnabled
+                        ? updateSettings({ deviceNotificationsEnabled: false })
+                        : void enableDeviceNotifications()
+                    }
+                  >
+                    {data.settings.deviceNotificationsEnabled
+                      ? 'Desactivar'
+                      : 'Activar'}
+                  </Button>
+                </div>
+              </label>
+
               <label>
                 <Droplets size={16} aria-hidden="true" />
                 Vaso

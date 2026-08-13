@@ -29,6 +29,24 @@ import { studyInsights } from '../../services/insights/studyInsightEngine'
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, Math.round(value)))
 const habitLineColors = ['#16a34a', '#2563eb', '#db2777', '#9333ea', '#e11d48', '#0f766e', '#0284c7']
 const trackedHabitNames = ['Entrenamiento', 'Lectura', 'Cuidado personal y skincare', 'Meditacion', 'Tiempo de pareja', 'Trabajo productivo', 'Tiempo con familia o amigos']
+const insightAreaLabels: Record<string, string> = {
+  general: 'General',
+  sleep: 'Sueno',
+  energy: 'Energia',
+  mood: 'Animo',
+  activity: 'Actividad',
+  food: 'Comida',
+  work: 'Trabajo',
+  study: 'Estudio',
+  finance: 'Finanzas',
+  recreation: 'Recreacion',
+}
+const confidenceLabels: Record<string, string> = {
+  insufficient: 'insuficiente',
+  low: 'baja',
+  medium: 'media',
+  high: 'alta',
+}
 
 const localDateKey = (date: Date): string => {
   const year = date.getFullYear()
@@ -828,7 +846,7 @@ const selectedPeriodStyle = {
           <div className="progress-pattern-grid">
             {patternInsights.map((insight) => (
               <article key={insight.id}>
-                <span>{insight.area} · confianza {insight.confidence}</span>
+                <span>{insightAreaLabels[insight.area]} · confianza {confidenceLabels[insight.confidence]}</span>
                 <strong>{insight.title}</strong>
                 <p>{insight.message}</p>
               </article>

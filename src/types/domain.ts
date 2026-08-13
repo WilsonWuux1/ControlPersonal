@@ -41,6 +41,7 @@ export interface AppSettings extends BaseEntity {
   movementReminderMinutes?: number
   notificationQuietStart?: string
   notificationQuietEnd?: string
+  deviceNotificationsEnabled?: boolean
 }
 
 export interface Habit extends BaseEntity {
