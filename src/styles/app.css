@@ -6883,13 +6883,35 @@ th { color: var(--muted); font-size: .82rem; }
 
 .wellbeing-hydration-card {
   display: grid;
-  gap: 10px;
+  gap: 0;
 }
 
 .wellbeing-hydration-card__summary {
   display: flex;
   align-items: center;
   gap: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.wellbeing-hydration-card__summary::-webkit-details-marker {
+  display: none;
+}
+
+.wellbeing-hydration-card__summary > svg:last-child {
+  margin-left: auto;
+  color: var(--muted);
+  transition: transform .16s ease;
+}
+
+.wellbeing-hydration-card[open] .wellbeing-hydration-card__summary > svg:last-child {
+  transform: rotate(180deg);
+}
+
+.wellbeing-hydration-card__body {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
 }
 
 .wellbeing-hydration-card__summary svg {
@@ -6964,6 +6986,19 @@ th { color: var(--muted); font-size: .82rem; }
   font-weight: 800;
 }
 
+.study-course-form {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.study-course-form .button {
+  min-height: 40px;
+  padding-inline: 12px;
+}
+
 .study-course-list button.active {
   border-color: var(--primary);
   box-shadow: inset 0 0 0 1px var(--primary);
@@ -7023,6 +7058,26 @@ th { color: var(--muted); font-size: .82rem; }
   display: block;
   color: var(--muted);
   margin-top: 4px;
+}
+
+.study-empty-compact {
+  display: grid;
+  gap: 2px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.study-empty-compact strong {
+  font-size: .95rem;
+}
+
+.study-empty-compact span {
+  color: var(--muted);
+  font-size: .82rem;
+  line-height: 1.3;
 }
 
 .progress-evaluation-grid,
@@ -7558,7 +7613,8 @@ th { color: var(--muted); font-size: .82rem; }
   }
 
   .study-hero .button {
-    width: 100%;
+    width: fit-content;
+    max-width: 100%;
     min-height: 42px;
   }
 

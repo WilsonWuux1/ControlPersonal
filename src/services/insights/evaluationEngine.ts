@@ -16,31 +16,60 @@ export const generateDailyEvaluation = (data: AppData, now = new Date()): DailyE
     ...studyInsights(data, now),
     ...financeInsights(data, now),
   ].slice(0, 4)
-  const lowEnergy = (checkIn?.energy ?? 3) <= 2
-  const lowMood = (checkIn?.mood ?? 3) <= 2
-  const title = lowEnergy || lowMood ? 'Conviene bajar la friccion.' : 'Tienes una base para avanzar.'
-  const activityAction =
-    activity.readiness === 'recover'
-      ? 'Haz una pausa corta, toma agua y deja el entrenamiento en movimiento suave.'
+
+  const hasEnergy = typeof checkIn?.energy === 'number'
+  const hasMood = typeof checkIn?.mood === 'number'
+  const energy = checkIn?.energy
+  const mood = checkIn?.mood
+  const lowEnergy = (energy ?? 3) <= 2
+  const lowMood = (mood ?? 3) <= 2
+  const goodEnergy = (energy ?? 0) >= 4
+  const goodMood = (mood ?? 0) >= 4
+  const strongActivity = activity.last7DaysMinutes >= 120
+  const needsPersonalSignals = !hasEnergy || !hasMood
+
+  const title = needsPersonalSignals
+    ? 'Primero calibra el dia.'
+    : lowEnergy || lowMood
+      ? 'Hoy conviene recuperar energia.'
+      : goodEnergy && goodMood && strongActivity
+        ? 'Vas construyendo una buena base.'
+        : 'El dia esta estable.'
+
+  const message = needsPersonalSignals
+    ? 'Todavia falta tu lectura personal de energia y animo. Sin eso puedo ver actividad, trabajo o sueno, pero no se como te estas sintiendo hoy.'
+    : lowEnergy || lowMood
+      ? 'Tu energia o animo estan bajos. En este contexto conviene elegir una accion pequena que reduzca friccion, no una meta pesada.'
+      : goodEnergy && goodMood && strongActivity
+        ? 'Tus senales principales van bien. El siguiente paso no es exigirte mas, sino mantener lo que ya esta funcionando.'
+        : 'No aparece una senal fuerte de desorden. El siguiente paso es proteger continuidad con una accion concreta antes de que el dia se diluya.'
+
+  const mainAction = needsPersonalSignals
+    ? 'Registra energia y animo; despues el sistema podra recomendar con mas precision.'
+    : activity.readiness === 'recover'
+      ? 'Haz una pausa corta, toma agua y usa movimiento suave para recuperar energia sin exigirte de mas.'
       : activity.last7DaysMinutes < 30
-        ? 'Registra 5 a 10 minutos de movimiento para mantener continuidad.'
-        : 'Mantén el siguiente paso pequeno y concreto.'
+        ? 'Haz 5 a 10 minutos de movimiento. Sirve para mantener continuidad sin convertirlo en una rutina pesada.'
+        : goodEnergy && goodMood && strongActivity
+          ? 'Manten el ritmo: registra una accion clave y evita subir intensidad solo por sentir que puedes hacer mas.'
+          : 'Elige una accion de cierre: movimiento corto, prioridad simple o preparar comida para que el cansancio no decida por ti.'
+
   const evidence = [
-    `Energia registrada: ${checkIn?.energy ?? 'sin registro'}/5.`,
-    `Animo registrado: ${checkIn?.mood ?? 'sin registro'}/5.`,
-    `Trabajo efectivo hoy: ${workMinutes} min.`,
-    `Actividad ultimos 7 dias: ${activity.last7DaysMinutes} min.`,
+    hasEnergy ? `Tu energia hoy esta en ${energy}/5.` : 'Aun no registraste tu energia de hoy.',
+    hasMood ? `Tu animo hoy esta en ${mood}/5.` : 'Aun no registraste tu animo de hoy.',
+    workMinutes > 0 ? `Hoy llevas ${workMinutes} min de trabajo efectivo.` : 'No hay trabajo efectivo registrado hoy.',
+    activity.last7DaysMinutes > 0
+      ? `En los ultimos 7 dias registraste ${activity.last7DaysMinutes} min de entrenamiento o movimiento.`
+      : 'No hay actividad fisica registrada en los ultimos 7 dias.',
   ]
-  if (sleepAverage > 0) evidence.push(`Sueno promedio registrado: ${sleepAverage.toFixed(1)} h.`)
+  if (sleepAverage > 0) evidence.push(`Tu sueno promedio registrado es ${sleepAverage.toFixed(1)} h.`)
   const studyMinutes = studyMinutesThisWeek(data, now)
   if (studyMinutes > 0) evidence.push(`Estudio esta semana: ${studyMinutes} min.`)
 
   return {
     title,
-    message: lowEnergy || lowMood
-      ? 'Tus registros sugieren que hoy es mejor recuperar energia antes que exigirte mas intensidad.'
-      : 'Tus registros no muestran una senal fuerte de alarma; el mejor avance sigue siendo una accion concreta.',
-    mainAction: activityAction,
+    message,
+    mainAction,
     evidence,
     insights,
   }

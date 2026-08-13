@@ -382,18 +382,18 @@ export function DashboardPage() {
 
       <section className="dashboard-daily-evaluation">
         <div>
-          <span>Tu situacion hoy</span>
+          <span>Lectura del dia</span>
           <h3>{dailyEvaluation.title}</h3>
           <p>{dailyEvaluation.message}</p>
         </div>
 
         <div className="dashboard-daily-evaluation__action">
-          <strong>Siguiente paso</strong>
+          <strong>Que hacer ahora</strong>
           <p>{dailyEvaluation.mainAction}</p>
         </div>
 
         <details>
-          <summary>Por que</summary>
+          <summary>Que estoy tomando en cuenta</summary>
           <ul>
             {dailyEvaluation.evidence.slice(0, 4).map((item) => (
               <li key={item}>{item}</li>

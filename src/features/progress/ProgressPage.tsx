@@ -832,7 +832,7 @@ const selectedPeriodStyle = {
         </div>
         <div className="progress-evaluation-grid">
           <article>
-            <strong>Siguiente paso</strong>
+            <strong>Que hacer ahora</strong>
             <p>{dailyEvaluation.mainAction}</p>
           </article>
           {dailyEvaluation.evidence.slice(0, 3).map((item) => (

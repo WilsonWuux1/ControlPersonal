@@ -508,8 +508,8 @@ export function WellbeingPage() {
         </article>
       </div>
 
-      <section className="wellbeing-hydration-card">
-        <div className="wellbeing-hydration-card__summary">
+      <details className="wellbeing-hydration-card">
+        <summary className="wellbeing-hydration-card__summary">
           <Droplets size={20} aria-hidden="true" />
           <div>
             <strong>Hidratacion</strong>
@@ -520,65 +520,68 @@ export function WellbeingPage() {
                 : ''}
             </span>
           </div>
-        </div>
-        <p>{hydrationGuidance.message}</p>
-        {hydrationGuidance.reason ? (
-          <details className="wellbeing-hydration-reason">
-            <summary>Por que esta cantidad</summary>
-            <p>{hydrationGuidance.reason}</p>
-            <ul>
-              {hydrationGuidance.evidence.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
-        <div className="wellbeing-hydration-actions">
-          <Button
-            variant="secondary"
-            onClick={() =>
-              void registerHydration(
-                data.settings.hydrationGlassMl ?? 250,
-                'Vaso',
-              )
-            }
-          >
-            + vaso
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() =>
-              void registerHydration(
-                data.settings.hydrationBottleMl ?? 600,
-                'Botella',
-              )
-            }
-          >
-            + botella
-          </Button>
-          <label>
-            Cantidad ml
-            <input
-              type="number"
-              min={1}
-              value={hydrationAmount}
-              onChange={(event) =>
-                setHydrationAmount(Number(event.target.value))
+          <ChevronDown size={18} aria-hidden="true" />
+        </summary>
+        <div className="wellbeing-hydration-card__body">
+          <p>{hydrationGuidance.message}</p>
+          {hydrationGuidance.reason ? (
+            <details className="wellbeing-hydration-reason">
+              <summary>Por que esta cantidad</summary>
+              <p>{hydrationGuidance.reason}</p>
+              <ul>
+                {hydrationGuidance.evidence.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          <div className="wellbeing-hydration-actions">
+            <Button
+              variant="secondary"
+              onClick={() =>
+                void registerHydration(
+                  data.settings.hydrationGlassMl ?? 250,
+                  'Vaso',
+                )
               }
-            />
-          </label>
-          <Button
-            onClick={() =>
-              void registerHydration(
-                Math.max(1, hydrationAmount),
-                'Cantidad manual',
-              )
-            }
-          >
-            Agregar
-          </Button>
+            >
+              + vaso
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                void registerHydration(
+                  data.settings.hydrationBottleMl ?? 600,
+                  'Botella',
+                )
+              }
+            >
+              + botella
+            </Button>
+            <label>
+              Cantidad ml
+              <input
+                type="number"
+                min={1}
+                value={hydrationAmount}
+                onChange={(event) =>
+                  setHydrationAmount(Number(event.target.value))
+                }
+              />
+            </label>
+            <Button
+              onClick={() =>
+                void registerHydration(
+                  Math.max(1, hydrationAmount),
+                  'Cantidad manual',
+                )
+              }
+            >
+              Agregar
+            </Button>
+          </div>
         </div>
-      </section>
+      </details>
 
 
       <section className="wellbeing-collapse">

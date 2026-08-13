@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { Button } from '../../components/Button'
-import { EmptyState } from '../../components/EmptyState'
 import { StatCard } from '../../components/StatCard'
 import { studyInsights, studyMinutesThisWeek } from '../../services/insights/studyInsightEngine'
 import { useAppStore } from '../../stores/appStore'
@@ -70,6 +69,41 @@ const activityStatusLabel = {
   'in-progress': 'En progreso',
   completed: 'Completada',
 } as const
+const importanceOptions = [
+  { value: 1, label: 'Baja' },
+  { value: 2, label: 'Util' },
+  { value: 3, label: 'Importante' },
+  { value: 4, label: 'Muy importante' },
+  { value: 5, label: 'Clave' },
+]
+const masteryOptions = [
+  { value: 1, label: 'Nuevo' },
+  { value: 2, label: 'Me cuesta' },
+  { value: 3, label: 'Lo entiendo a medias' },
+  { value: 4, label: 'Lo manejo' },
+  { value: 5, label: 'Lo domino' },
+]
+const difficultyOptions = [
+  { value: 1, label: 'Muy facil' },
+  { value: 2, label: 'Facil' },
+  { value: 3, label: 'Normal' },
+  { value: 4, label: 'Dificil' },
+  { value: 5, label: 'Muy dificil' },
+]
+const focusOptions = [
+  { value: 1, label: 'Muy distraido' },
+  { value: 2, label: 'Distraido' },
+  { value: 3, label: 'Concentrado' },
+  { value: 4, label: 'Enfocado' },
+  { value: 5, label: 'Profundo' },
+]
+const comprehensionOptions = [
+  { value: 1, label: 'No entendi' },
+  { value: 2, label: 'Entendi poco' },
+  { value: 3, label: 'Entendi lo basico' },
+  { value: 4, label: 'Entendi bien' },
+  { value: 5, label: 'Claridad alta' },
+]
 
 export function StudyPage() {
   const data = useAppStore((state) => state.data)
@@ -81,6 +115,7 @@ export function StudyPage() {
   const startStudySession = useAppStore((state) => state.startStudySession)
   const finishStudySession = useAppStore((state) => state.finishStudySession)
   const [selectedCourseId, setSelectedCourseId] = useState<string | undefined>(data?.courses.find((course) => course.status === 'active')?.id)
+  const [courseFormOpen, setCourseFormOpen] = useState(false)
 
   const courseForm = useForm<CourseFormInput, unknown, CourseForm>({ resolver: zodResolver(courseSchema), defaultValues: { name: '', language: '', targetWeeklyMinutes: 240 } })
   const topicForm = useForm<TopicFormInput, unknown, TopicForm>({ resolver: zodResolver(topicSchema), defaultValues: { name: '', importance: 3, currentMastery: 2, difficulty: 3 } })
@@ -92,6 +127,7 @@ export function StudyPage() {
   const courseTopics = selectedCourse ? data?.studyTopics.filter((topic) => topic.courseId === selectedCourse.id) ?? [] : []
   const courseActivities = selectedCourse ? data?.courseActivities.filter((activity) => activity.courseId === selectedCourse.id) ?? [] : []
   const activeSession = data?.studySessions.find((session) => !session.endedAt)
+  const activeSessionCourse = activeSession ? data?.courses.find((course) => course.id === activeSession.courseId) : undefined
   const weeklyMinutes = data ? studyMinutesThisWeek(data) : 0
   const insights = useMemo(() => (data ? studyInsights(data) : []), [data])
   const completedSessions = data?.studySessions.filter((session) => session.endedAt) ?? []
@@ -200,16 +236,20 @@ export function StudyPage() {
       <section className="panel study-hero">
         <div>
           <h2>Estudio</h2>
-          <p>Registra cursos, temas, actividades y sesiones. El sistema usa esos datos para recomendar el siguiente paso academico con evidencia.</p>
+          <p>
+            {selectedCourse
+              ? `Curso seleccionado: ${selectedCourse.name}.`
+              : 'Primero crea o selecciona un curso.'}
+          </p>
         </div>
         <div className="study-timer-actions">
           {activeSession ? (
             <Button icon={<Square size={18} />} onClick={() => void quickFinish()}>
-              Finalizar sesion
+              Finalizar {activeSessionCourse?.name ?? 'sesion'}
             </Button>
           ) : (
             <Button icon={<Play size={18} />} onClick={() => void quickStart()} disabled={!selectedCourse}>
-              Iniciar sesion
+              {selectedCourse ? `Iniciar ${selectedCourse.name}` : 'Crea un curso'}
             </Button>
           )}
         </div>
@@ -218,23 +258,27 @@ export function StudyPage() {
       <section className="panel">
         <div className="panel-header">
           <h2>Cursos</h2>
-          <span>{selectedCourse ? `Seleccionado: ${selectedCourse.name}` : 'Crea un curso para empezar'}</span>
+          <Button variant="secondary" icon={<Plus size={16} />} onClick={() => setCourseFormOpen((open) => !open)}>
+            {courseFormOpen ? 'Cerrar' : 'Nuevo curso'}
+          </Button>
         </div>
-        <form className="form-grid three" onSubmit={(event) => void courseForm.handleSubmit(createCourse)(event)}>
-          <label>
-            Nombre
-            <input {...courseForm.register('name')} placeholder="Ej. Ingles, Universidad, Certificacion" />
-          </label>
-          <label>
-            Idioma
-            <input {...courseForm.register('language')} placeholder="Opcional" />
-          </label>
-          <label>
-            Meta semanal min
-            <input type="number" {...courseForm.register('targetWeeklyMinutes')} />
-          </label>
-          <Button type="submit" icon={<Plus size={18} />}>Crear curso</Button>
-        </form>
+        {courseFormOpen ? (
+          <form className="form-grid three study-course-form" onSubmit={(event) => void courseForm.handleSubmit(createCourse)(event)}>
+            <label>
+              Nombre
+              <input {...courseForm.register('name')} placeholder="Ej. Ingles" />
+            </label>
+            <label>
+              Idioma
+              <input {...courseForm.register('language')} placeholder="Opcional" />
+            </label>
+            <label>
+              Meta semanal
+              <input type="number" {...courseForm.register('targetWeeklyMinutes')} />
+            </label>
+            <Button type="submit" icon={<Plus size={18} />}>Crear</Button>
+          </form>
+        ) : null}
         {courses.length > 0 ? (
           <div className="study-course-list">
             {courses.map((course) => (
@@ -245,7 +289,10 @@ export function StudyPage() {
             ))}
           </div>
         ) : (
-          <EmptyState title="Sin cursos" description="Agrega cursos de universidad, idiomas, certificaciones o estudio autodidacta." />
+          <div className="study-empty-compact">
+            <strong>Sin cursos</strong>
+            <span>Agrega uno para registrar sesiones y actividades.</span>
+          </div>
         )}
       </section>
 
@@ -262,9 +309,24 @@ export function StudyPage() {
                 <input {...topicForm.register('name')} placeholder="Ej. Listening, estadistica inferencial" />
               </label>
               <div className="form-grid three">
-                <label>Importancia<input type="number" {...topicForm.register('importance')} /></label>
-                <label>Dominio<input type="number" {...topicForm.register('currentMastery')} /></label>
-                <label>Dificultad<input type="number" {...topicForm.register('difficulty')} /></label>
+                <label>
+                  Importancia
+                  <select {...topicForm.register('importance')}>
+                    {importanceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Dominio
+                  <select {...topicForm.register('currentMastery')}>
+                    {masteryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Dificultad
+                  <select {...topicForm.register('difficulty')}>
+                    {difficultyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
               </div>
               <Button type="submit" icon={<Plus size={18} />}>Agregar tema</Button>
             </form>
@@ -322,9 +384,24 @@ export function StudyPage() {
               <div className="form-grid two">
                 <label>Minutos<input type="number" {...sessionForm.register('durationMinutes')} /></label>
                 <label>Tipo<select {...sessionForm.register('type')}><option value="practice">Practica</option><option value="reading">Lectura</option><option value="review">Repaso</option><option value="assignment">Tarea</option><option value="language">Idioma</option><option value="other">Otro</option></select></label>
-                <label>Enfoque<input type="number" {...sessionForm.register('focusLevel')} /></label>
-                <label>Dificultad<input type="number" {...sessionForm.register('difficulty')} /></label>
-                <label>Comprension<input type="number" {...sessionForm.register('comprehension')} /></label>
+                <label>
+                  Enfoque
+                  <select {...sessionForm.register('focusLevel')}>
+                    {focusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Dificultad
+                  <select {...sessionForm.register('difficulty')}>
+                    {difficultyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Comprension
+                  <select {...sessionForm.register('comprehension')}>
+                    {comprehensionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
               </div>
               <label>Que costo<input {...sessionForm.register('struggledWith')} placeholder="Opcional" /></label>
               <label>Que repasar<input {...sessionForm.register('nextReview')} placeholder="Opcional" /></label>
